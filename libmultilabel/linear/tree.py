@@ -14,8 +14,8 @@ from . import linear
 __all__ = [
         "train_tree", 
         "train_random_partitions",
+        "train_random_label_forests_with_partitions", 
         #"train_random_selection-100", 
-        #"train_random_label_forests_10P", 
         #"train_random_label_forests_100U"
         ]
 
@@ -316,13 +316,7 @@ def _build_tree_with_partitions(label_representation: sparse.csr_matrix, label_m
         # we still set #clusters = 100 when using K-means.
         metalabels = (
             sklearn.cluster.KMeans(
-                100,
-                random_state=np.random.randint(2**31 - 1),
-                n_init=1,
-                max_iter=300,
-                tol=0.0001,
-                algorithm="elkan",
-            )
+                100, random_state=np.random.randint(2**31 - 1), n_init=1, max_iter=300, tol=0.0001, algorithm="elkan")
             .fit(label_representation)
             .labels_
         )
@@ -336,15 +330,8 @@ def _build_tree_with_partitions(label_representation: sparse.csr_matrix, label_m
             children.append(child)
         return Node(label_map=label_map, children=children)
 
-
 def train_random_partitions(
-    y: sparse.csr_matrix,
-    x: sparse.csr_matrix,
-    options: str = "",
-    K=100,
-    dmax=10,
-    verbose: bool = True,
-) -> TreeModel:
+        y: sparse.csr_matrix, x: sparse.csr_matrix, options: str = "", K=100, dmax=10, verbose: bool = True,) -> TreeModel:
     """Random partitions model in RLF paper.
     """
     label_representation = (y.T * x).tocsr()
@@ -388,46 +375,41 @@ def train_random_partitions(
 
     return TreeModel(root, flat_model, weight_map), root.is_root
 
-
-
-
-def train_tree_partition(
-    y: sparse.csr_matrix,
-    x: sparse.csr_matrix,
-    options: str = "",
-    K=100,
-    dmax=10,
-    verbose: bool = True,
-) -> TreeModel:
-    """Random label forests 10P
-    """
-    label_representation = (y.T * x).tocsr()
-    label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
-    
+def partition_labels(num_labels, K):
     metalabels = []
     filter_pool = []
     counter = np.zeros(K, dtype=int)
-    while len(metalabels) < label_representation.shape[0]:
+    while len(metalabels) < num_labels:
         label_partition = np.random.choice(K)
         if label_partition not in filter_pool:
             counter[label_partition] += 1
             metalabels += [label_partition]
-            if counter[label_partition] == int( label_representation.shape[0] / K ):
+            if counter[label_partition] == int( num_labels / K ):
                 filter_pool += [label_partition]
 
         if len(filter_pool) == K:
             break
 
-    diff = label_representation.shape[0] - len(metalabels)
+    diff = num_labels - len(metalabels)
     if diff > 1:
         metalabels += [i for i in np.random.choice(K, size=K, replace=False)[:diff] ]
     elif diff == 1:
         metalabels += [np.random.choice(K)]
     metalabels = np.array(metalabels)
 
+    return metalabels
+
+def train_random_label_forests_with_partitions(
+    y: sparse.csr_matrix, x: sparse.csr_matrix, options: str = "", K=100, dmax=10, verbose: bool = True,) -> TreeModel:
+    """Random label forests with partitions on labels in RLF paper.
+    """
+    label_representation = (y.T * x).tocsr()
+    label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
+
+    metalabels = partition_labels(label_representation.shape[0], K)
+
     models = []
     for i in range(K):
-        #models += [ train_tree( y[:, metalabels==i], x, options, K=100, dmax) ]
         models += [ train_tree( y[:, metalabels==i], x, options, 100, dmax) ]
 
     return models, metalabels
@@ -449,8 +431,8 @@ def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, 
     if d >= dmax or label_representation.shape[0] <= K:
         return Node(label_map=label_map, children=[])
 
-    if d == 0:
-    #if d < 0:
+    #if d == 0:
+    if d < 0:
         #print("d == 0", flush=True)
         metalabels = []
         filter_pool = []
