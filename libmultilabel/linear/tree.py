@@ -283,26 +283,8 @@ def _build_tree_with_partitions(label_representation: sparse.csr_matrix, label_m
         return Node(label_map=label_map, children=[])
 
     if d == 0:
-        metalabels = []
-        filter_pool = []
-        counter = np.zeros(K, dtype=int)
-        while len(metalabels) < label_representation.shape[0]:
-            label_partition = np.random.choice(K)
-            if label_partition not in filter_pool:
-                counter[label_partition] += 1
-                metalabels += [label_partition]
-                if counter[label_partition] == int( label_representation.shape[0] / K ):
-                    filter_pool += [label_partition]
-
-            if len(filter_pool) == K:
-                break
-
-        diff = label_representation.shape[0] - len(metalabels)
-        if diff > 1:
-            metalabels += [i for i in np.random.choice(K, size=K, replace=False)[:diff] ]
-        elif diff == 1:
-            metalabels += [np.random.choice(K)]
-        metalabels = np.array(metalabels)
+        metalabels = partition_labels(label_representation.shape[0], K)
+        
         children = []
         for i in range(K):
             child_representation = label_representation[metalabels == i]
@@ -560,11 +542,12 @@ def _flatten_model(root: Node) -> tuple[linear.FlatModel, np.ndarray]:
 
     model = linear.FlatModel(
         name="flattened-tree",
-        weights=sparse.hstack(weights, "csr"),
+        weights=sparse.hstack(weights, "csc"),
         bias=bias,
         thresholds=0,
         multiclass=False,
     )
+    #weights=sparse.hstack(weights, "csr"), # memory issue
 
     # w.shape[1] is the number of labels/metalabels of each node
     weight_map = np.cumsum([0] + list(map(lambda w: w.shape[1], weights)))
