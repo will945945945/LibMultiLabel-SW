@@ -11,7 +11,7 @@ import psutil
 
 from . import linear
 
-__all__ = ["train_tree", "TreeModel"]
+__all__ = ["train_tree", "train_tree_subsample", "train_tree_partition"]
 
 
 class Node:
@@ -19,6 +19,7 @@ class Node:
         self,
         label_map: np.ndarray,
         children: list[Node],
+        is_root=None
     ):
         """
         Args:
@@ -27,6 +28,7 @@ class Node:
         """
         self.label_map = label_map
         self.children = children
+        self.is_root = is_root
 
     def isLeaf(self) -> bool:
         return len(self.children) == 0
@@ -58,6 +60,7 @@ class TreeModel:
         x: sparse.csr_matrix,
         beam_width: int = 10,
     ) -> np.ndarray:
+        #level_0_model: linear.FlatModel,
         """Calculates the decision values associated with x.
 
         Args:
@@ -67,10 +70,17 @@ class TreeModel:
         Returns:
             np.ndarray: A matrix with dimension number of instances * number of classes.
         """
+        # level_0_pred 
+        # level_0_pred = linear.predict_values(level_0_model, x)
+
         # number of instances * number of labels + total number of metalabels
         all_preds = linear.predict_values(self.flat_model, x)
-        return np.vstack([self._beam_search(all_preds[i], beam_width) for i in range(all_preds.shape[0])])
+        #return np.vstack([self._beam_search(all_preds[i], beam_width) for i in range(all_preds.shape[0])])
 
+        #return sparse.vstack([ sparse.csr_matrix( self._beam_search(level_0_pred[i], all_preds[i], beam_width) ) for i in range(all_preds.shape[0])])
+        return sparse.vstack([ sparse.csr_matrix( self._beam_search(all_preds[i], beam_width) ) for i in range(all_preds.shape[0])])
+
+    #def _beam_search(self, level_0_pred: np.ndarray, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
     def _beam_search(self, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
         """Predict with beam search using cached decision values for a single instance.
 
@@ -82,6 +92,7 @@ class TreeModel:
             np.ndarray: A vector with dimension number of classes.
         """
         cur_level = [(self.root, 0.0)]  # pairs of (node, score)
+        #cur_level = [(self.root, -np.maximum(0, 1 - level_0_pred) ** 2)]  # pairs of (node, score)
         next_level = []
         while True:
             num_internal = sum(map(lambda pair: not pair[0].isLeaf(), cur_level))
@@ -101,12 +112,99 @@ class TreeModel:
             next_level = []
 
         num_labels = len(self.root.label_map)
-        scores = np.full(num_labels, -np.inf)
+        #scores = np.full(num_labels, -np.inf)
+        scores = np.full(num_labels, 0.0)
         for node, score in cur_level:
             slice = np.s_[self.weight_map[node.index] : self.weight_map[node.index + 1]]
             pred = instance_preds[slice]
             scores[node.label_map] = np.exp(score - np.maximum(0, 1 - pred) ** 2)
         return scores
+
+def train_tree_subsample(
+    y: sparse.csr_matrix,
+    x: sparse.csr_matrix,
+    options: str = "",
+    K=100,
+    dmax=10,
+    sample_rate=0.1,
+    verbose: bool = True,
+) -> TreeModel:
+    """Trains a linear model for multiabel data using a divide-and-conquer strategy.
+    The algorithm used is based on https://github.com/xmc-aalto/bonsai.
+
+    Args:
+        y (sparse.csr_matrix): A 0/1 matrix with dimensions number of instances * number of classes.
+        x (sparse.csr_matrix): A matrix with dimensions number of instances * number of features.
+        options (str): The option string passed to liblinear.
+        K (int, optional): Maximum degree of nodes in the tree. Defaults to 100.
+        dmax (int, optional): Maximum depth of the tree. Defaults to 10.
+        verbose (bool, optional): Output extra progress information. Defaults to True.
+
+    Returns:
+        A model which can be used in predict_values.
+    """
+    # def subsample_indices(num_label: int, sample_rate: float) -> list:
+    #     indices = []
+    #     for idx in range(num_label):
+    #         if np.random.uniform(low=0.0, high=1.0) < sample_rate:
+    #             indices += [idx]
+    #     return indices
+    def subsample_indices(y, sample_rate):
+        # # label dist
+        # total_labels = np.sum(y) 
+        # label_dist = np.sum(y, axis=0)/total_labels
+        # label_dist = np.squeeze( np.asarray(label_dist) )
+        # indices = np.random.choice(y.shape[1], int(y.shape[1]*sample_rate), replace=False, p=label_dist )
+
+        # uniform dist
+        indices = np.random.choice(y.shape[1], int(y.shape[1]*sample_rate), replace=False, p=np.ones(y.shape[1])/y.shape[1] )
+        indices = np.sort(indices)
+        return indices.tolist()
+
+    #indices = subsample_indices(y.shape[1], sample_rate)
+    indices = subsample_indices(y, sample_rate)
+    y_level_1 = y[:,indices]
+
+    # level 0's binary
+    y_level_0 = np.sum(y_level_1, axis=1) > 1
+    y_level_0 = y_level_0.astype(int)
+    y_level_0 = sparse.csr_matrix(y_level_0)
+    level_0_model = linear.train_1vsrest(y_level_0, x, options, verbose)
+
+    # level 1's tree-based 
+    label_representation = (y_level_1.T * x).tocsr()
+    label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
+    root = _build_tree(label_representation, np.arange(y_level_1.shape[1]), 0, K, dmax)
+    root.is_root = True
+
+    num_nodes = 0
+
+    def count(node):
+        nonlocal num_nodes
+        num_nodes += 1
+
+    root.dfs(count)
+
+    pbar = tqdm(total=num_nodes, disable=not verbose)
+
+    def visit(node):
+        # # no binary in head
+        # if node.is_root == False:
+        #     relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
+        # else:
+        #     relevant_instances = y[:, node.label_map].getnnz(axis=1) >= 0
+
+        # binary in head
+        relevant_instances = y_level_1[:, node.label_map].getnnz(axis=1) > 0
+
+        _train_node(y_level_1[relevant_instances], x[relevant_instances], options, node)
+        pbar.update()
+
+    root.dfs(visit)
+    pbar.close()
+
+    flat_model, weight_map = _flatten_model(root)
+    return level_0_model, TreeModel(root, flat_model, weight_map), indices
 
 
 def train_tree(
@@ -169,7 +267,49 @@ def train_tree(
     pbar.close()
 
     flat_model, weight_map = _flatten_model(root)
-    return TreeModel(root, flat_model, weight_map)
+    #return TreeModel(root, flat_model, weight_map)
+    return TreeModel(root, flat_model, weight_map), root.is_root
+
+def train_tree_partition(
+    y: sparse.csr_matrix,
+    x: sparse.csr_matrix,
+    options: str = "",
+    K=100,
+    dmax=10,
+    verbose: bool = True,
+) -> TreeModel:
+    """Random label forests 10P
+    """
+    label_representation = (y.T * x).tocsr()
+    label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
+    
+    metalabels = []
+    filter_pool = []
+    counter = np.zeros(K, dtype=int)
+    while len(metalabels) < label_representation.shape[0]:
+        label_partition = np.random.choice(K)
+        if label_partition not in filter_pool:
+            counter[label_partition] += 1
+            metalabels += [label_partition]
+            if counter[label_partition] == int( label_representation.shape[0] / K ):
+                filter_pool += [label_partition]
+
+        if len(filter_pool) == K:
+            break
+
+    diff = label_representation.shape[0] - len(metalabels)
+    if diff > 1:
+        metalabels += [i for i in np.random.choice(K, size=K, replace=False)[:diff] ]
+    elif diff == 1:
+        metalabels += [np.random.choice(K)]
+    metalabels = np.array(metalabels)
+
+    models = []
+    for i in range(K):
+        #models += [ train_tree( y[:, metalabels==i], x, options, K=100, dmax) ]
+        models += [ train_tree( y[:, metalabels==i], x, options, 100, dmax) ]
+
+    return models, metalabels
 
 
 def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, d: int, K: int, dmax: int) -> Node:
@@ -188,27 +328,60 @@ def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, 
     if d >= dmax or label_representation.shape[0] <= K:
         return Node(label_map=label_map, children=[])
 
-    metalabels = (
-        sklearn.cluster.KMeans(
-            K,
-            random_state=np.random.randint(2**31 - 1),
-            n_init=1,
-            max_iter=300,
-            tol=0.0001,
-            algorithm="elkan",
+    if d == 0:
+    #if d < 0:
+        #print("d == 0", flush=True)
+        metalabels = []
+        filter_pool = []
+        counter = np.zeros(K, dtype=int)
+        while len(metalabels) < label_representation.shape[0]:
+            label_partition = np.random.choice(K)
+            if label_partition not in filter_pool:
+                counter[label_partition] += 1
+                metalabels += [label_partition]
+                if counter[label_partition] == int( label_representation.shape[0] / K ):
+                    filter_pool += [label_partition]
+
+            if len(filter_pool) == K:
+                break
+
+        diff = label_representation.shape[0] - len(metalabels)
+        #print(label_representation.shape[0], len(metalabels), diff)
+        if diff > 1:
+            metalabels += [i for i in np.random.choice(K, size=K, replace=False)[:diff] ]
+        elif diff == 1:
+            metalabels += [np.random.choice(K)]
+        metalabels = np.array(metalabels)
+        #print("partition done", flush=True)
+        #print(metalabels.shape, flush=True)
+        children = []
+        for i in range(K):
+            child_representation = label_representation[metalabels == i]
+            child_map = label_map[metalabels == i]
+            child = _build_tree(child_representation, child_map, d + 1, 100, dmax)
+            children.append(child)
+        return Node(label_map=label_map, children=children, is_root=metalabels)
+
+    else:
+        metalabels = (
+            sklearn.cluster.KMeans(
+                100,
+                random_state=np.random.randint(2**31 - 1),
+                n_init=1,
+                max_iter=300,
+                tol=0.0001,
+                algorithm="elkan",
+            )
+            .fit(label_representation)
+            .labels_
         )
-        .fit(label_representation)
-        .labels_
-    )
-
-    children = []
-    for i in range(K):
-        child_representation = label_representation[metalabels == i]
-        child_map = label_map[metalabels == i]
-        child = _build_tree(child_representation, child_map, d + 1, K, dmax)
-        children.append(child)
-
-    return Node(label_map=label_map, children=children)
+        children = []
+        for i in range(100):
+            child_representation = label_representation[metalabels == i]
+            child_map = label_map[metalabels == i]
+            child = _build_tree(child_representation, child_map, d + 1, 100, dmax)
+            children.append(child)
+        return Node(label_map=label_map, children=children)
 
 
 def get_estimated_model_size(root):
