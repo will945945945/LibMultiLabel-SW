@@ -15,7 +15,8 @@ __all__ = [
         "train_tree", 
         "train_random_partitions",
         "train_random_label_forests_with_partitions", 
-        #"train_random_selection-100", 
+        "train_tree_subsample",
+        "train_random_selection", 
         #"train_random_label_forests_100U"
         ]
 
@@ -126,28 +127,57 @@ class TreeModel:
             scores[node.label_map] = np.exp(score - np.maximum(0, 1 - pred) ** 2)
         return scores
 
+def train_random_selection(
+    y: sparse.csr_matrix, x: sparse.csr_matrix, options: str = "", K=100, dmax=10, sample_rate=0.1, verbose: bool = True,) -> TreeModel:
+    """Random Selections in RLF paper.
+    """
+    def subsample_indices(y, sample_rate):
+        indices = np.random.choice(y.shape[1], int(y.shape[1]*sample_rate), replace=False, p=np.ones(y.shape[1])/y.shape[1] )
+        indices = np.sort(indices)
+        return indices.tolist()
+
+    indices = subsample_indices(y, sample_rate)
+    y_level_1 = y[:,indices]
+
+    # level 0's binary
+    y_level_0 = np.sum(y_level_1, axis=1) > 1
+    y_level_0 = y_level_0.astype(int)
+    y_level_0 = sparse.csr_matrix(y_level_0)
+    level_0_model = linear.train_1vsrest(y_level_0, x, False, options, verbose)
+
+    # level 1's tree-based 
+    label_representation = (y_level_1.T * x).tocsr()
+    label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
+    root = _build_tree(label_representation, np.arange(y_level_1.shape[1]), 0, K, dmax)
+    root.is_root = True
+
+    num_nodes = 0
+
+    def count(node):
+        nonlocal num_nodes
+        num_nodes += 1
+
+    root.dfs(count)
+
+    pbar = tqdm(total=num_nodes, disable=not verbose)
+
+    def visit(node):
+        # binary in head
+        relevant_instances = y_level_1[:, node.label_map].getnnz(axis=1) > 0
+
+        _train_node(y_level_1[relevant_instances], x[relevant_instances], options, node)
+        pbar.update()
+
+    root.dfs(visit)
+    pbar.close()
+
+    flat_model, weight_map = _flatten_model(root)
+    return level_0_model, TreeModel(root, flat_model, weight_map), indices
+
+
 def train_tree_subsample(
-    y: sparse.csr_matrix,
-    x: sparse.csr_matrix,
-    options: str = "",
-    K=100,
-    dmax=10,
-    sample_rate=0.1,
-    verbose: bool = True,
-) -> TreeModel:
-    """Trains a linear model for multiabel data using a divide-and-conquer strategy.
-    The algorithm used is based on https://github.com/xmc-aalto/bonsai.
-
-    Args:
-        y (sparse.csr_matrix): A 0/1 matrix with dimensions number of instances * number of classes.
-        x (sparse.csr_matrix): A matrix with dimensions number of instances * number of features.
-        options (str): The option string passed to liblinear.
-        K (int, optional): Maximum degree of nodes in the tree. Defaults to 100.
-        dmax (int, optional): Maximum depth of the tree. Defaults to 10.
-        verbose (bool, optional): Output extra progress information. Defaults to True.
-
-    Returns:
-        A model which can be used in predict_values.
+    y: sparse.csr_matrix, x: sparse.csr_matrix, options: str = "", K=100, dmax=10, sample_rate=0.1, verbose: bool = True,) -> TreeModel:
+    """Random Selections
     """
     # def subsample_indices(num_label: int, sample_rate: float) -> list:
     #     indices = []
@@ -175,7 +205,7 @@ def train_tree_subsample(
     y_level_0 = np.sum(y_level_1, axis=1) > 1
     y_level_0 = y_level_0.astype(int)
     y_level_0 = sparse.csr_matrix(y_level_0)
-    level_0_model = linear.train_1vsrest(y_level_0, x, options, verbose)
+    level_0_model = linear.train_1vsrest(y_level_0, x, False, options, verbose)
 
     # level 1's tree-based 
     label_representation = (y_level_1.T * x).tocsr()
@@ -244,7 +274,10 @@ def train_tree(
     pbar = tqdm(total=num_nodes, disable=not verbose)
 
     def visit(node):
-        relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
+        if node.is_root == False:
+            relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
+        else:
+            relevant_instances = y[:, node.label_map].getnnz(axis=1) >= 0
         _train_node(y[relevant_instances], x[relevant_instances], options, node)
         pbar.update()
 
@@ -339,7 +372,10 @@ def train_random_partitions(
     pbar = tqdm(total=num_nodes, disable=not verbose)
 
     def visit(node):
-        relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
+        if node.is_root == False:
+            relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
+        else:
+            relevant_instances = y[:, node.label_map].getnnz(axis=1) >= 0
         _train_node(y[relevant_instances], x[relevant_instances], options, node)
         pbar.update()
 
