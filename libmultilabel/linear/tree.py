@@ -49,12 +49,7 @@ class Node:
 class TreeModel:
     """A model returned from train_tree."""
 
-    def __init__(
-        self,
-        root: Node,
-        flat_model: linear.FlatModel,
-        weight_map: np.ndarray,
-    ):
+    def __init__(self, root: Node, flat_model: linear.FlatModel, weight_map: np.ndarray):
         self.name = "tree"
         self.root = root
         self.flat_model = flat_model
@@ -62,11 +57,7 @@ class TreeModel:
         self.multiclass = False
 
     def predict_values(
-        self,
-        x: sparse.csr_matrix,
-        beam_width: int = 10,
-    ) -> np.ndarray:
-        #level_0_model: linear.FlatModel,
+        self, x: sparse.csr_matrix, level_0_model: linear.FlatModel, beam_width: int = 10 ) -> np.ndarray:
         """Calculates the decision values associated with x.
 
         Args:
@@ -77,17 +68,18 @@ class TreeModel:
             np.ndarray: A matrix with dimension number of instances * number of classes.
         """
         # level_0_pred 
-        # level_0_pred = linear.predict_values(level_0_model, x)
+        level_0_pred = linear.predict_values(level_0_model, x)
 
         # number of instances * number of labels + total number of metalabels
         all_preds = linear.predict_values(self.flat_model, x)
         #return np.vstack([self._beam_search(all_preds[i], beam_width) for i in range(all_preds.shape[0])])
 
-        #return sparse.vstack([ sparse.csr_matrix( self._beam_search(level_0_pred[i], all_preds[i], beam_width) ) for i in range(all_preds.shape[0])])
-        return sparse.vstack([ sparse.csr_matrix( self._beam_search(all_preds[i], beam_width) ) for i in range(all_preds.shape[0])])
+        return sparse.vstack([ sparse.csr_matrix( self._beam_search(level_0_pred[i], all_preds[i], beam_width) ) for i in range(all_preds.shape[0])])
+        #return sparse.vstack([ sparse.csr_matrix( self._beam_search(all_preds[i], beam_width) ) for i in range(all_preds.shape[0])])
 
-    #def _beam_search(self, level_0_pred: np.ndarray, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
-    def _beam_search(self, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
+    
+    def _beam_search(self, level_0_pred: np.ndarray, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
+    #def _beam_search(self, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
         """Predict with beam search using cached decision values for a single instance.
 
         Args:
@@ -97,8 +89,8 @@ class TreeModel:
         Returns:
             np.ndarray: A vector with dimension number of classes.
         """
-        cur_level = [(self.root, 0.0)]  # pairs of (node, score)
-        #cur_level = [(self.root, -np.maximum(0, 1 - level_0_pred) ** 2)]  # pairs of (node, score)
+        #cur_level = [(self.root, 0.0)]  # pairs of (node, score)
+        cur_level = [(self.root, -np.maximum(0, 1 - level_0_pred) ** 2)]  # pairs of (node, score)
         next_level = []
         while True:
             num_internal = sum(map(lambda pair: not pair[0].isLeaf(), cur_level))
@@ -118,7 +110,48 @@ class TreeModel:
             next_level = []
 
         num_labels = len(self.root.label_map)
-        #scores = np.full(num_labels, -np.inf)
+        scores = np.full(num_labels, 0.0)
+        for node, score in cur_level:
+            slice = np.s_[self.weight_map[node.index] : self.weight_map[node.index + 1]]
+            pred = instance_preds[slice]
+            scores[node.label_map] = np.exp(score - np.maximum(0, 1 - pred) ** 2)
+        return scores
+
+    def predict_values_on_random_selections(
+        self, x: sparse.csr_matrix, level_0_model: linear.FlatModel, beam_width: int = 10 ) -> np.ndarray:
+        """Calculates probability estimation of random selections in RLF paper"""
+        # level_0_pred 
+        level_0_pred = linear.predict_values(level_0_model, x)
+
+        # number of instances * number of labels + total number of metalabels
+        all_preds = linear.predict_values(self.flat_model, x)
+
+        return sparse.vstack([ sparse.csr_matrix( self._beam_search(level_0_pred[i], all_preds[i], beam_width) ) for i in range(all_preds.shape[0])])
+
+    def _beam_search_for_random_selections(self, level_0_pred: np.ndarray, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
+        """Predict with beam search using cached decision values for a single instance.
+           This is implemented for random selections in RLF paper.
+        """
+        cur_level = [(self.root, -np.maximum(0, 1 - level_0_pred) ** 2)]  # pairs of (node, score)
+        next_level = []
+        while True:
+            num_internal = sum(map(lambda pair: not pair[0].isLeaf(), cur_level))
+            if num_internal == 0:
+                break
+
+            for node, score in cur_level:
+                if node.isLeaf():
+                    next_level.append((node, score))
+                    continue
+                slice = np.s_[self.weight_map[node.index] : self.weight_map[node.index + 1]]
+                pred = instance_preds[slice]
+                children_score = score - np.maximum(0, 1 - pred) ** 2
+                next_level.extend(zip(node.children, children_score.tolist()))
+
+            cur_level = sorted(next_level, key=lambda pair: -pair[1])[:beam_width]
+            next_level = []
+
+        num_labels = len(self.root.label_map)
         scores = np.full(num_labels, 0.0)
         for node, score in cur_level:
             slice = np.s_[self.weight_map[node.index] : self.weight_map[node.index + 1]]
