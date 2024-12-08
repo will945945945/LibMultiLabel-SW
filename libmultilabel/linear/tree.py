@@ -15,9 +15,8 @@ __all__ = [
         "train_tree", 
         "train_random_partitions",
         "train_random_label_forests_with_partitions", 
-        "train_tree_subsample",
-        "train_random_selection", 
-        #"train_random_label_forests_100U"
+        "train_random_selections", 
+        "train_random_label_forests",
         ]
 
 
@@ -127,7 +126,7 @@ class TreeModel:
             scores[node.label_map] = np.exp(score - np.maximum(0, 1 - pred) ** 2)
         return scores
 
-def train_random_selection(
+def train_random_selections(
     y: sparse.csr_matrix, x: sparse.csr_matrix, options: str = "", K=100, dmax=10, sample_rate=0.1, verbose: bool = True,) -> TreeModel:
     """Random Selections in RLF paper.
     """
@@ -175,42 +174,21 @@ def train_random_selection(
     return level_0_model, TreeModel(root, flat_model, weight_map), indices
 
 
-def train_tree_subsample(
+def train_random_label_forests(
     y: sparse.csr_matrix, x: sparse.csr_matrix, options: str = "", K=100, dmax=10, sample_rate=0.1, verbose: bool = True,) -> TreeModel:
-    """Random Selections
+    """Random label forests in RLF paper
     """
-    # def subsample_indices(num_label: int, sample_rate: float) -> list:
-    #     indices = []
-    #     for idx in range(num_label):
-    #         if np.random.uniform(low=0.0, high=1.0) < sample_rate:
-    #             indices += [idx]
-    #     return indices
     def subsample_indices(y, sample_rate):
-        # # label dist
-        # total_labels = np.sum(y) 
-        # label_dist = np.sum(y, axis=0)/total_labels
-        # label_dist = np.squeeze( np.asarray(label_dist) )
-        # indices = np.random.choice(y.shape[1], int(y.shape[1]*sample_rate), replace=False, p=label_dist )
-
-        # uniform dist
         indices = np.random.choice(y.shape[1], int(y.shape[1]*sample_rate), replace=False, p=np.ones(y.shape[1])/y.shape[1] )
         indices = np.sort(indices)
         return indices.tolist()
 
-    #indices = subsample_indices(y.shape[1], sample_rate)
     indices = subsample_indices(y, sample_rate)
-    y_level_1 = y[:,indices]
+    y = y[:,indices]
 
-    # level 0's binary
-    y_level_0 = np.sum(y_level_1, axis=1) > 1
-    y_level_0 = y_level_0.astype(int)
-    y_level_0 = sparse.csr_matrix(y_level_0)
-    level_0_model = linear.train_1vsrest(y_level_0, x, False, options, verbose)
-
-    # level 1's tree-based 
-    label_representation = (y_level_1.T * x).tocsr()
+    label_representation = (y.T * x).tocsr()
     label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
-    root = _build_tree(label_representation, np.arange(y_level_1.shape[1]), 0, K, dmax)
+    root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
     root.is_root = True
 
     num_nodes = 0
@@ -224,23 +202,18 @@ def train_tree_subsample(
     pbar = tqdm(total=num_nodes, disable=not verbose)
 
     def visit(node):
-        # # no binary in head
-        # if node.is_root == False:
-        #     relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
-        # else:
-        #     relevant_instances = y[:, node.label_map].getnnz(axis=1) >= 0
-
-        # binary in head
-        relevant_instances = y_level_1[:, node.label_map].getnnz(axis=1) > 0
-
-        _train_node(y_level_1[relevant_instances], x[relevant_instances], options, node)
+        if node.is_root == False:
+            relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
+        else:
+            relevant_instances = y[:, node.label_map].getnnz(axis=1) >= 0
+        _train_node(y[relevant_instances], x[relevant_instances], options, node)
         pbar.update()
 
     root.dfs(visit)
     pbar.close()
 
     flat_model, weight_map = _flatten_model(root)
-    return level_0_model, TreeModel(root, flat_model, weight_map), indices
+    return TreeModel(root, flat_model, weight_map), indices
 
 
 def train_tree(
