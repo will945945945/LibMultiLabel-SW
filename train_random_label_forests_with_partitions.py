@@ -47,9 +47,8 @@ model_name = "./models/" + model_name + "-{}".format(model_idx)
 if not os.path.isfile(model_name):
     model, metalabels = linear.train_random_label_forests_with_partitions(
         datasets["train"]["y"], datasets["train"]["x"], "-s 1 -B 1 -e 0.0001 -q",K=ARGS.K)
-print("training cost:", time.time()-model_start, flush=True)
-
-with open(model_name, "wb") as F:
-    pickle.dump((model, metalabels), F, protocol=5)
+    print("training cost:", time.time()-model_start, flush=True)
+    with open(model_name, "wb") as F:
+        pickle.dump((model, metalabels), F, protocol=5)
 
 print("total cost:", time.time()-start, flush=True)
