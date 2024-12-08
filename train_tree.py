@@ -20,7 +20,7 @@ with open(ARGS.datapath + '.pkl', "rb") as F:
     datasets = pickle.load(F)
 print("data loading cost:", time.time()-start, flush=True)
 
-model_name = "Tree-with-all-labels_{data}_seed={seed}_K={K}_sample-rate={sample_rate}.model".format(
+model_name = "Tree-with-all-labels_{data}_seed={seed}_K={K}.model".format(
         seed = ARGS.seed,
         K = ARGS.K,
         data = os.path.basename(ARGS.datapath)
