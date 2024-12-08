@@ -21,12 +21,7 @@ __all__ = [
 
 
 class Node:
-    def __init__(
-        self,
-        label_map: np.ndarray,
-        children: list[Node],
-        is_root=None
-    ):
+    def __init__(self, label_map: np.ndarray, children: list[Node], is_root=None):
         """
         Args:
             label_map (np.ndarray): The labels under this node.
@@ -57,29 +52,15 @@ class TreeModel:
         self.multiclass = False
 
     def predict_values(
-        self, x: sparse.csr_matrix, level_0_model: linear.FlatModel, beam_width: int = 10 ) -> np.ndarray:
-        """Calculates the decision values associated with x.
-
-        Args:
-            x (sparse.csr_matrix): A matrix with dimension number of instances * number of features.
-            beam_width (int, optional): Number of candidates considered during beam search. Defaults to 10.
-
-        Returns:
-            np.ndarray: A matrix with dimension number of instances * number of classes.
-        """
-        # level_0_pred 
-        level_0_pred = linear.predict_values(level_0_model, x)
-
+        self, x: sparse.csr_matrix, beam_width: int = 10 ) -> np.ndarray:
+        """Calculates the probability estimates associated with x."""
         # number of instances * number of labels + total number of metalabels
         all_preds = linear.predict_values(self.flat_model, x)
-        #return np.vstack([self._beam_search(all_preds[i], beam_width) for i in range(all_preds.shape[0])])
 
-        return sparse.vstack([ sparse.csr_matrix( self._beam_search(level_0_pred[i], all_preds[i], beam_width) ) for i in range(all_preds.shape[0])])
-        #return sparse.vstack([ sparse.csr_matrix( self._beam_search(all_preds[i], beam_width) ) for i in range(all_preds.shape[0])])
+        return sparse.vstack([ sparse.csr_matrix( self._beam_search(all_preds[i], beam_width) ) for i in range(all_preds.shape[0])])
 
     
-    def _beam_search(self, level_0_pred: np.ndarray, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
-    #def _beam_search(self, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
+    def _beam_search(self, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
         """Predict with beam search using cached decision values for a single instance.
 
         Args:
@@ -89,8 +70,7 @@ class TreeModel:
         Returns:
             np.ndarray: A vector with dimension number of classes.
         """
-        #cur_level = [(self.root, 0.0)]  # pairs of (node, score)
-        cur_level = [(self.root, -np.maximum(0, 1 - level_0_pred) ** 2)]  # pairs of (node, score)
+        cur_level = [(self.root, 0.0)]  # pairs of (node, score)
         next_level = []
         while True:
             num_internal = sum(map(lambda pair: not pair[0].isLeaf(), cur_level))
