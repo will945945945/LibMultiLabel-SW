@@ -214,35 +214,15 @@ def train_tree_subsample(
 
 
 def train_tree(
-    y: sparse.csr_matrix,
-    x: sparse.csr_matrix,
-    options: str = "",
-    K=100,
-    dmax=10,
-    verbose: bool = True,
-) -> TreeModel:
+    y: sparse.csr_matrix, x: sparse.csr_matrix, options: str = "", K=100, dmax=10, verbose: bool = True,) -> TreeModel:
     """Trains a linear model for multi-label data using a divide-and-conquer strategy.
     The algorithm used is based on https://github.com/xmc-aalto/bonsai.
-
-    Args:
-        y (sparse.csr_matrix): A 0/1 matrix with dimensions number of instances * number of classes.
-        x (sparse.csr_matrix): A matrix with dimensions number of instances * number of features.
-        options (str): The option string passed to liblinear.
-        K (int, optional): Maximum degree of nodes in the tree. Defaults to 100.
-        dmax (int, optional): Maximum depth of the tree. Defaults to 10.
-        verbose (bool, optional): Output extra progress information. Defaults to True.
-
-    Returns:
-        A model which can be used in predict_values.
     """
     label_representation = (y.T * x).tocsr()
     label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
     root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
 
     num_nodes = 0
-    # Both type(x) and type(y) are sparse.csr_matrix
-    # However, type((x != 0).T) becomes sparse.csc_matrix
-    # So type((x != 0).T * y) results in sparse.csc_matrix
     features_used_perlabel = (x != 0).T * y
 
     def count(node):
@@ -255,7 +235,6 @@ def train_tree(
     model_size = get_estimated_model_size(root)
     print(f'The estimated tree model size is: {model_size / (1024**3):.3f} GB')
 
-    # Calculate the total memory (excluding swap) on the local machine
     total_memory = psutil.virtual_memory().total 
     print(f'Your system memory is: {total_memory / (1024**3):.3f} GB')
 
@@ -273,88 +252,6 @@ def train_tree(
     pbar.close()
 
     flat_model, weight_map = _flatten_model(root)
-    #return TreeModel(root, flat_model, weight_map)
-    return TreeModel(root, flat_model, weight_map), root.is_root
-
-def _build_tree_with_partitions(label_representation: sparse.csr_matrix, label_map: np.ndarray, d: int, K: int, dmax: int) -> Node:
-    """Builds the tree recursively by kmeans clustering, but uses random partition in first level.
-    """
-    if d >= dmax or label_representation.shape[0] <= K:
-        return Node(label_map=label_map, children=[])
-
-    if d == 0:
-        metalabels = partition_labels(label_representation.shape[0], K)
-        
-        children = []
-        for i in range(K):
-            child_representation = label_representation[metalabels == i]
-            child_map = label_map[metalabels == i]
-            # we still set #clusters = 100 when using K-means.
-            child = _build_tree(child_representation, child_map, d + 1, 100, dmax)
-            children.append(child)
-        return Node(label_map=label_map, children=children, is_root=metalabels)
-
-    else:
-        # we still set #clusters = 100 when using K-means.
-        metalabels = (
-            sklearn.cluster.KMeans(
-                100, random_state=np.random.randint(2**31 - 1), n_init=1, max_iter=300, tol=0.0001, algorithm="elkan")
-            .fit(label_representation)
-            .labels_
-        )
-        children = []
-        # we still set #clusters = 100 when using K-means.
-        for i in range(100):
-            child_representation = label_representation[metalabels == i]
-            child_map = label_map[metalabels == i]
-            # we still set #clusters = 100 when using K-means.
-            child = _build_tree(child_representation, child_map, d + 1, 100, dmax)
-            children.append(child)
-        return Node(label_map=label_map, children=children)
-
-def train_random_partitions(
-        y: sparse.csr_matrix, x: sparse.csr_matrix, options: str = "", K=100, dmax=10, verbose: bool = True,) -> TreeModel:
-    """Random partitions model in RLF paper.
-    """
-    label_representation = (y.T * x).tocsr()
-    label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
-    root = _build_tree_with_partitions(label_representation, np.arange(y.shape[1]), 0, K, dmax)
-
-    num_nodes = 0
-    # Both type(x) and type(y) are sparse.csr_matrix
-    # However, type((x != 0).T) becomes sparse.csc_matrix
-    # So type((x != 0).T * y) results in sparse.csc_matrix
-    features_used_perlabel = (x != 0).T * y
-
-    def count(node):
-        nonlocal num_nodes
-        num_nodes += 1
-        node.num_features_used = np.count_nonzero(features_used_perlabel[:, node.label_map].sum(axis=1))
-
-    root.dfs(count)
-
-    model_size = get_estimated_model_size(root)
-    print(f'The estimated tree model size is: {model_size / (1024**3):.3f} GB')
-
-    # Calculate the total memory (excluding swap) on the local machine
-    total_memory = psutil.virtual_memory().total 
-    print(f'Your system memory is: {total_memory / (1024**3):.3f} GB')
-
-    if (total_memory <= model_size):
-        raise MemoryError(f'Not enough memory to train the model.')
-
-    pbar = tqdm(total=num_nodes, disable=not verbose)
-
-    def visit(node):
-        relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
-        _train_node(y[relevant_instances], x[relevant_instances], options, node)
-        pbar.update()
-
-    root.dfs(visit)
-    pbar.close()
-
-    flat_model, weight_map = _flatten_model(root)
-
     return TreeModel(root, flat_model, weight_map), root.is_root
 
 def partition_labels(num_labels, K):
@@ -381,82 +278,27 @@ def partition_labels(num_labels, K):
 
     return metalabels
 
-def train_random_label_forests_with_partitions(
-    y: sparse.csr_matrix, x: sparse.csr_matrix, options: str = "", K=100, dmax=10, verbose: bool = True,) -> TreeModel:
-    """Random label forests with partitions on labels in RLF paper.
-    """
-    label_representation = (y.T * x).tocsr()
-    label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
-
-    metalabels = partition_labels(label_representation.shape[0], K)
-
-    models = []
-    for i in range(K):
-        models += [ train_tree( y[:, metalabels==i], x, options, 100, dmax) ]
-
-    return models, metalabels
-
-
-def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, d: int, K: int, dmax: int) -> Node:
-    """Builds the tree recursively by kmeans clustering.
-
-    Args:
-        label_representation (sparse.csr_matrix): A matrix with dimensions number of classes under this node * number of features.
-        label_map (np.ndarray): Maps 0..label_representation.shape[0] to the original label indices.
-        d (int): Current depth.
-        K (int): Maximum degree of nodes in the tree.
-        dmax (int): Maximum depth of the tree.
-
-    Returns:
-        Node: root of the (sub)tree built from label_representation.
-    """
+def _build_tree_with_partitions(label_representation: sparse.csr_matrix, label_map: np.ndarray, d: int, K: int, dmax: int) -> Node:
+    """Builds the tree recursively by kmeans clustering, but uses random partition in first level."""
     if d >= dmax or label_representation.shape[0] <= K:
         return Node(label_map=label_map, children=[])
 
-    #if d == 0:
-    if d < 0:
-        #print("d == 0", flush=True)
-        metalabels = []
-        filter_pool = []
-        counter = np.zeros(K, dtype=int)
-        while len(metalabels) < label_representation.shape[0]:
-            label_partition = np.random.choice(K)
-            if label_partition not in filter_pool:
-                counter[label_partition] += 1
-                metalabels += [label_partition]
-                if counter[label_partition] == int( label_representation.shape[0] / K ):
-                    filter_pool += [label_partition]
-
-            if len(filter_pool) == K:
-                break
-
-        diff = label_representation.shape[0] - len(metalabels)
-        #print(label_representation.shape[0], len(metalabels), diff)
-        if diff > 1:
-            metalabels += [i for i in np.random.choice(K, size=K, replace=False)[:diff] ]
-        elif diff == 1:
-            metalabels += [np.random.choice(K)]
-        metalabels = np.array(metalabels)
-        #print("partition done", flush=True)
-        #print(metalabels.shape, flush=True)
+    if d == 0:
+        metalabels = partition_labels(label_representation.shape[0], K)
         children = []
         for i in range(K):
             child_representation = label_representation[metalabels == i]
             child_map = label_map[metalabels == i]
+            # we still set #clusters = 100 when using K-means.
             child = _build_tree(child_representation, child_map, d + 1, 100, dmax)
             children.append(child)
         return Node(label_map=label_map, children=children, is_root=metalabels)
 
     else:
+        # we still set #clusters = 100 when using K-means.
         metalabels = (
             sklearn.cluster.KMeans(
-                100,
-                random_state=np.random.randint(2**31 - 1),
-                n_init=1,
-                max_iter=300,
-                tol=0.0001,
-                algorithm="elkan",
-            )
+                100, random_state=np.random.randint(2**31 - 1), n_init=1, max_iter=300, tol=0.0001, algorithm="elkan")
             .fit(label_representation)
             .labels_
         )
@@ -467,6 +309,81 @@ def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, 
             child = _build_tree(child_representation, child_map, d + 1, 100, dmax)
             children.append(child)
         return Node(label_map=label_map, children=children)
+
+def train_random_partitions(
+        y: sparse.csr_matrix, x: sparse.csr_matrix, options: str = "", K=100, dmax=10, verbose: bool = True,) -> TreeModel:
+    """Random partitions model in RLF paper."""
+    label_representation = (y.T * x).tocsr()
+    label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
+    root = _build_tree_with_partitions(label_representation, np.arange(y.shape[1]), 0, K, dmax)
+
+    num_nodes = 0
+    features_used_perlabel = (x != 0).T * y
+
+    def count(node):
+        nonlocal num_nodes
+        num_nodes += 1
+        node.num_features_used = np.count_nonzero(features_used_perlabel[:, node.label_map].sum(axis=1))
+
+    root.dfs(count)
+
+    model_size = get_estimated_model_size(root)
+    print(f'The estimated tree model size is: {model_size / (1024**3):.3f} GB')
+
+    total_memory = psutil.virtual_memory().total 
+    print(f'Your system memory is: {total_memory / (1024**3):.3f} GB')
+
+    if (total_memory <= model_size):
+        raise MemoryError(f'Not enough memory to train the model.')
+
+    pbar = tqdm(total=num_nodes, disable=not verbose)
+
+    def visit(node):
+        relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
+        _train_node(y[relevant_instances], x[relevant_instances], options, node)
+        pbar.update()
+
+    root.dfs(visit)
+    pbar.close()
+
+    flat_model, weight_map = _flatten_model(root)
+
+    return TreeModel(root, flat_model, weight_map), root.is_root
+
+def train_random_label_forests_with_partitions(
+    y: sparse.csr_matrix, x: sparse.csr_matrix, options: str = "", K=10, dmax=10, verbose: bool = True,) -> TreeModel:
+    """Random label forests with partitions on labels in RLF paper."""
+    label_representation = (y.T * x).tocsr()
+    label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
+
+    metalabels = partition_labels(label_representation.shape[0], K)
+
+    models = []
+    for i in range(K):
+        # we still set #clusters = 100 when using K-means.
+        models += [ train_tree( y[:, metalabels==i], x, options, 100, dmax) ]
+
+    return models, metalabels
+
+
+def _build_tree(label_representation: sparse.csr_matrix, label_map: np.ndarray, d: int, K: int, dmax: int) -> Node:
+    """Builds the tree recursively by kmeans clustering."""
+    if d >= dmax or label_representation.shape[0] <= K:
+        return Node(label_map=label_map, children=[])
+
+    metalabels = (
+        sklearn.cluster.KMeans(
+            K, random_state=np.random.randint(2**31 - 1), n_init=1, max_iter=300, tol=0.0001, algorithm="elkan")
+        .fit(label_representation)
+        .labels_
+    )
+    children = []
+    for i in range(K):
+        child_representation = label_representation[metalabels == i]
+        child_map = label_map[metalabels == i]
+        child = _build_tree(child_representation, child_map, d + 1, K, dmax)
+        children.append(child)
+    return Node(label_map=label_map, children=children)
 
 
 def get_estimated_model_size(root):

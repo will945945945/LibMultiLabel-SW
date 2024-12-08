@@ -57,7 +57,8 @@ if ARGS.idx >= 0:
     submodel_name = "./models/" + model_name + "-{}".format(model_idx)
     if not os.path.isfile(submodel_name):
         #model, metalabels = linear.train_tree_partition(
-        model, metalabels = linear.train_tree(
+        #model, metalabels = linear.train_tree(
+        model, metalabels = linear.train_random_partitions(
             datasets["train"]["y"], datasets["train"]["x"], "-s 1 -B 1 -e 0.0001 -q",K=ARGS.K)
         #level_0_model, level_1_model, indices = linear.train_tree_subsample(
         #        datasets["train"]["y"], datasets["train"]["x"], "-s 1 -B 1 -e 0.0001 -m 32 -q", sample_rate=ARGS.sample_rate, K=ARGS.K)
