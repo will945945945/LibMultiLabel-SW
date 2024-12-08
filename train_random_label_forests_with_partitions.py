@@ -49,7 +49,7 @@ if not os.path.isfile(model_name):
         datasets["train"]["y"], datasets["train"]["x"], "-s 1 -B 1 -e 0.0001 -q",K=ARGS.K)
 print("training cost:", time.time()-model_start, flush=True)
 
-with open(submodel_name, "wb") as F:
+with open(model_name, "wb") as F:
     pickle.dump((model, metalabels), F, protocol=5)
 
 print("total cost:", time.time()-start, flush=True)
