@@ -1,4 +1,0 @@
-Cited Papers
-============
-
- .. bibliography::

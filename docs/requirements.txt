@@ -1,5 +1,0 @@
-sphinx==5
-sphinx-rtd-theme
-sphinx-gallery
-matplotlib
-sphinxcontrib-bibtex
