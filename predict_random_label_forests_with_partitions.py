@@ -40,11 +40,11 @@ def metrics_in_batches(model_name, batch_size):
         for model_idx in tqdm(range(ARGS.num_models)):
             submodel_name = "./models/" + model_name + "-{}".format(model_idx)
             with open(submodel_name, "rb") as F:
-                models, metalabels = pickle.load(F)
+                tmp = models, metalabels = pickle.load(F)
 
             for model_idx in range(ARGS.K):
                 for metalabel in range(len(models)):
-                    model = models[metalabel]
+                    model = models[metalabel][0]
                     preds = model.predict_values(tmp_data, beam_width=ARGS.beam_width)
                     preds = preds.toarray(order='F')
                     indices = metalabels == metalabel
