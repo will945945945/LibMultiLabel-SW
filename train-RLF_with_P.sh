@@ -3,7 +3,6 @@ mkdir -p models
 
 num_models=10
 K=10
-#for data in "amazon-670k-pecos";
 for data in  "amazoncat-13k";
 #for data in "amazon-670k-pecos";
 do

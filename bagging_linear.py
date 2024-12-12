@@ -48,7 +48,7 @@ def predict_in_batches(model_name, batch_size, model_idx):
             continue
         tmp_data = datasets["test"]["x"][i * batch_size : (i + 1) * batch_size]
         sub_start = time.time()
-        preds = level_1_model.predict_values(tmp_data, level_0_model, beam_width=ARGS.beam_width)
+        preds = level_1_model.predict_values_on_random_selections(tmp_data, level_0_model, beam_width=ARGS.beam_width)
         #preds = tmp.predict_values(tmp_data)
         print("preds cost:", time.time()-sub_start, flush=True)
         sub_start = time.time()
@@ -105,26 +105,37 @@ def metrics_in_batches(model_name, batch_size):
         total_preds = np.zeros([tmp_data.shape[0], datasets["train"]["y"].shape[1]], order='F')
         total_cnts = np.zeros(datasets["train"]["y"].shape[1])
 
-        submodel_name = "./models/" + model_name + "-{}".format(0)
-        sub_start = time.time()
-        with open(submodel_name, "rb") as F:
-            total_models = pickle.load(F)
-        for model_idx in range(10):
-            models, metalabels = total_models[model_idx]
-            #model = tmp
-            print("model loaded:", time.time()-sub_start, flush=True)
-        
-            sub_start = time.time()
-            # preds = level_1_model.predict_values(tmp_data, level_0_model, beam_width=ARGS.beam_width)
-            for metalabel in tqdm(range(len(models))):
-                model = models[metalabel]
-                preds = model.predict_values(tmp_data, beam_width=ARGS.beam_width)
-                preds = preds.toarray(order='F')
-                indices = metalabels == metalabel
-                total_preds[:, indices] += preds
-                total_cnts[indices] += 1
-            print("preds cost:", time.time()-sub_start, flush=True)
+        for model_idx in tqdm(range(ARGS.num_models)):
+            submodel_name = "./models/" + model_name + "-{}".format(model_idx)
+            with open(submodel_name, "rb") as F:
+                #model, indices = pickle.load(F)
+                total_model = pickle.load(F)
+            for model_idx in range(ARGS.K):
+                models, metalabels = total_models[model_idx]
+
+                for metalabel in range(len(models)):
+                    model = models[metalabel]
+                    preds = model.predict_values(tmp_data, beam_width=ARGS.beam_width)
+                    preds = preds.toarray(order='F')
+                    indices = metalabels == metalabel
+                    total_preds[:, indices] += preds
+                    total_cnts[indices] += 1
             #sub_start = time.time()
+        #submodel_name = "./models/" + model_name + "-{}".format(0)
+        #sub_start = time.time()
+        #with open(submodel_name, "rb") as F:
+        #    total_models = pickle.load(F)
+        #for model_idx in range(10):
+            #models, metalabels = total_models[model_idx]
+            #model = tmp
+        
+            #preds = model.predict_values(tmp_data, beam_width=ARGS.beam_width)
+            #preds = preds.toarray(order='F')
+            #total_preds += preds
+            #total_cnts += 1
+            #total_preds[:, indices] += preds
+            #total_cnts[indices] += 1
+            
 
         target = datasets["test"]["y"][i * batch_size : (i + 1) * batch_size].toarray()
         print("min total_cnts = ", np.min(total_cnts), flush=True)
@@ -166,7 +177,7 @@ def metrics_in_batches(model_name, batch_size):
     # return metrics.compute()
 
 
-#model_name = "Rand-label-Forest-LD_{data}_seed={seed}_K={K}_sample-rate={sample_rate}.model".format(
+#model_name = "Rand-label-partitions-No-replacement_{data}_seed={seed}_K={K}_sample-rate={sample_rate}.model".format(
 #model_name = "Rand-label-Forest_{data}_seed={seed}_K={K}_sample-rate={sample_rate}.model".format(
 model_name = "Rand-label-Forest-No-replacement_{data}_seed={seed}_K={K}_sample-rate={sample_rate}.model".format(
         seed = ARGS.seed,
@@ -184,7 +195,6 @@ metrics = metrics_in_batches(model_name, 10000)
 #metrics = metrics_in_batches_without_pred(model_name, 10000)
 #metrics = metrics_in_batches(model_name, 1000)
 #predict_in_batches(model_name, 10000, ARGS.idx)
-
 
 print("mean in subsampled labels:", metrics)
 

@@ -8,27 +8,28 @@ mkdir -p models
 #for data in "amazon-670k-pecos";
 for data in "eur-lex";
 do
-  #for num_models in 100 50;
-  for num_models in 100;
-  #for num_models in 10;
+  #for num_models in 100;
+  for num_models in 10;
   do
     for beam_width in 10;
     do
       #for seed in 1 2 3 4 5 6 7 27 100 9527;
       for seed in 1;
       do
-        for K in 100;
-        #for K in 10;
+        #for K in 100;
+        for K in 10;
         do
-          for sample_rate in 0.1;
+          #for sample_rate in 0.1;
           #for sample_rate in 0.15;
-          #for sample_rate in 1.1;
+          for sample_rate in 1.1;
           do
-            head="Rand-selection-${num_models}"
-            #head="Rand-label-Forest-${num_models}"
             #head="Rand-label-Forest-LD-${num_models}"
             #head="Rand-label-Forest-No-replacement-ensemble-${num_models}"
             #head="Rand-label-partitions-No-replacement-ensemble-${num_models}"
+            #head="Rand-selection-${num_models}"
+            #head="Rand-label-partitions-No-replacement-${num_models}"
+            #head="Rand-label-Forest-${num_models}"
+            head="Rand-label-Forest-No-replacement-${num_models}"
             param="seed=${seed}_K=${K}_beam-width=${beam_width}_sample-rate=${sample_rate}"
             name="${head}_${data}_${param}" 
 
@@ -36,10 +37,13 @@ do
             then
               export MKL_INTERFACE_LAYER=ILP64
               #python3 bagging_linear.py \
-              python3 predict_random_selections.py \
+              python3 predict_random_label_forests_with_partitions.py \
     	        --num_models ${num_models} --seed ${seed} --K ${K} --beam_width ${beam_width} \
     	        --sample_rate ${sample_rate} --datapath "./datasets/pickle-format/${data}" \
     	        |tee ./logs/${name}.log
+              #python3 predict_random_label_partitions.py \
+              #python3 predict_random_selections.py \
+              #python3 predict_random_label_forests.py \
             fi
           done
         done
