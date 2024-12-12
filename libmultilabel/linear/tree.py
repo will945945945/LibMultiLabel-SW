@@ -21,7 +21,7 @@ __all__ = [
 
 
 class Node:
-    def __init__(self, label_map: np.ndarray, children: list[Node], is_root=None):
+    def __init__(self, label_map: np.ndarray, children: list[Node], is_root=False):
         """
         Args:
             label_map (np.ndarray): The labels under this node.
@@ -215,11 +215,11 @@ def train_random_label_forests(
     pbar = tqdm(total=num_nodes, disable=not verbose)
 
     def visit(node):
-        if node.is_root == False:
-            relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
+        if node.is_root == True:
+            _train_node(y, x, options, node)
         else:
-            relevant_instances = y[:, node.label_map].getnnz(axis=1) >= 0
-        _train_node(y[relevant_instances], x[relevant_instances], options, node)
+            relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
+            _train_node(y[relevant_instances], x[relevant_instances], options, node)
         pbar.update()
 
     root.dfs(visit)
@@ -237,6 +237,7 @@ def train_tree(
     label_representation = (y.T * x).tocsr()
     label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
     root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
+    root.is_root = True
 
     num_nodes = 0
     features_used_perlabel = (x != 0).T * y
@@ -260,11 +261,11 @@ def train_tree(
     pbar = tqdm(total=num_nodes, disable=not verbose)
 
     def visit(node):
-        if node.is_root == False:
-            relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
+        if node.is_root == True:
+            _train_node(y, x, options, node)
         else:
-            relevant_instances = y[:, node.label_map].getnnz(axis=1) >= 0
-        _train_node(y[relevant_instances], x[relevant_instances], options, node)
+            relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
+            _train_node(y[relevant_instances], x[relevant_instances], options, node)
         pbar.update()
 
     root.dfs(visit)
@@ -335,6 +336,7 @@ def train_random_partitions(
     label_representation = (y.T * x).tocsr()
     label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
     root = _build_tree_with_partitions(label_representation, np.arange(y.shape[1]), 0, K, dmax)
+    root.is_root = True
 
     num_nodes = 0
     features_used_perlabel = (x != 0).T * y
@@ -358,11 +360,11 @@ def train_random_partitions(
     pbar = tqdm(total=num_nodes, disable=not verbose)
 
     def visit(node):
-        if node.is_root == False:
-            relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
+        if node.is_root == True:
+            _train_node(y, x, options, node)
         else:
-            relevant_instances = y[:, node.label_map].getnnz(axis=1) >= 0
-        _train_node(y[relevant_instances], x[relevant_instances], options, node)
+            relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
+            _train_node(y[relevant_instances], x[relevant_instances], options, node)
         pbar.update()
 
     root.dfs(visit)
