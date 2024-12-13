@@ -8,13 +8,13 @@ with open("all_log") as F:
             tmp = dict()
             name = row.split("/")[-1]
             name = name.split(".log")[0]
-            tmp["name"] = name
             hyper_param = name.split("_")
+            tmp["name"] = hyper_param[0]
             tmp["num_model"] = int(hyper_param[0].split("-")[-1])
             tmp["dataset"] = hyper_param[1]
-            tmp["seed"] = int(hyper_param[2].split("=")[1])
-            tmp["K"] = int(hyper_param[3].split("=")[1])
-            tmp["beam_width"] = int(hyper_param[4].split("=")[1])
+            for idx in range(2, len(hyper_param)):
+                hp_pair = hyper_param[idx].split("=")
+                tmp[hp_pair[0]] = float(hp_pair[1])
             #tmp["sample_rate"] = float(hyper_param[5].split("=")[1])
         elif "labels:" in row:
             if "all" in row:
@@ -42,13 +42,15 @@ all_log = pandas.DataFrame.from_dict(all_log)
 #all_log = all_log[all_log["num_model"]==1]
 #all_log = all_log[all_log["sample_rate"]==0.3]
 #all_log = all_log[all_log["sample_rate"]>1.0]
-all_log = all_log.drop("name", axis=1)
+all_log = all_log.drop("beam-width", axis=1)
+all_log = all_log.drop("num_model", axis=1)
+#all_log = all_log.drop("name", axis=1)
 #all_log = all_log.drop("dataset", axis=1)
 print(all_log)
 
 #mean = all_log.groupby(["num_model", "K", "dataset", "beam_width", "sample_rate"]).mean()*100
-mean = all_log.groupby(["num_model", "K", "dataset", "beam_width"]).mean()*100
-mean = mean.drop("seed", axis=1)
+mean = all_log.groupby(["name", "K", "dataset"]).mean()*100
+#mean = mean.drop("seed", axis=1)
 mean = mean.round(2)
 print(mean)
         
