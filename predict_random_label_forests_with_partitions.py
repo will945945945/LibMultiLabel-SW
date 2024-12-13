@@ -37,12 +37,13 @@ def metrics_in_batches(model_name, batch_size):
         total_preds = np.zeros([tmp_data.shape[0], datasets["train"]["y"].shape[1]], order='F')
         total_cnts = np.zeros(datasets["train"]["y"].shape[1])
 
-        for model_idx in tqdm(range(ARGS.num_models)):
+        for model_idx in range(ARGS.num_models):
+            print("model_idx:", model_idx)
             submodel_name = "./models/" + model_name + "-{}".format(model_idx)
             with open(submodel_name, "rb") as F:
                 tmp = models, metalabels = pickle.load(F)
 
-            for model_idx in range(ARGS.K):
+            for idx in tqdm(range(ARGS.K)):
                 for metalabel in range(len(models)):
                     model = models[metalabel][0]
                     preds = model.predict_values(tmp_data, beam_width=ARGS.beam_width)
