@@ -43,14 +43,13 @@ def metrics_in_batches(model_name, batch_size):
             with open(submodel_name, "rb") as F:
                 tmp = models, metalabels = pickle.load(F)
 
-            for idx in tqdm(range(ARGS.K)):
-                for metalabel in range(len(models)):
-                    model = models[metalabel][0]
-                    preds = model.predict_values(tmp_data, beam_width=ARGS.beam_width)
-                    preds = preds.toarray(order='F')
-                    indices = metalabels == metalabel
-                    total_preds[:, indices] += preds
-                    total_cnts[indices] += 1
+            for metalabel in tqdm(range(len(models))):
+                model = models[metalabel][0]
+                preds = model.predict_values(tmp_data, beam_width=ARGS.beam_width)
+                preds = preds.toarray(order='F')
+                indices = metalabels == metalabel
+                total_preds[:, indices] += preds
+                total_cnts[indices] += 1
 
         target = datasets["test"]["y"][i * batch_size : (i + 1) * batch_size].toarray()
         total_preds /= total_cnts+1e-16
