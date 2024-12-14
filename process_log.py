@@ -50,7 +50,7 @@ print(all_log)
 
 #mean = all_log.groupby(["num_model", "K", "dataset", "beam_width", "sample_rate"]).mean()*100
 mean = all_log.groupby(["name", "K", "dataset"]).mean()*100
-#mean = mean.drop("seed", axis=1)
+mean = mean.drop("seed", axis=1)
 mean = mean.round(2)
 print(mean)
         

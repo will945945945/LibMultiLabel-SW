@@ -106,7 +106,11 @@ class TreeModel:
         # number of instances * number of labels + total number of metalabels
         all_preds = linear.predict_values(self.flat_model, x)
 
-        return sparse.vstack([ sparse.csr_matrix( self._beam_search(level_0_pred[i], all_preds[i], beam_width) ) for i in range(all_preds.shape[0])])
+        return sparse.vstack([ 
+            sparse.csr_matrix( 
+                self._beam_search_for_random_selections(level_0_pred[i], all_preds[i], beam_width) 
+                ) for i in range(all_preds.shape[0])
+            ])
 
     def _beam_search_for_random_selections(self, level_0_pred: np.ndarray, instance_preds: np.ndarray, beam_width: int) -> np.ndarray:
         """Predict with beam search using cached decision values for a single instance.

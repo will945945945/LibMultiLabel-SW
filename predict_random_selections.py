@@ -42,7 +42,7 @@ def metrics_in_batches(model_name, batch_size):
             with open(submodel_name, "rb") as F:
                 level_0_model, level_1_model, indices = pickle.load(F)
         
-            preds = level_1_model.predict_values(tmp_data, level_0_model, beam_width=ARGS.beam_width)
+            preds = level_1_model.predict_values_on_random_selections(tmp_data, level_0_model, beam_width=ARGS.beam_width)
             preds = preds.toarray(order='F')
             total_preds[:, indices] += preds
             total_cnts[indices] += 1
