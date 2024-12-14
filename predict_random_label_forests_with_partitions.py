@@ -64,7 +64,7 @@ model_name = "Rand-label-Forest-No-replacement_{data}_seed={seed}_K={K}_sample-r
         data = os.path.basename(ARGS.datapath)
         )
 
-metrics = metrics_in_batches(model_name, 10000)
+metrics = metrics_in_batches(model_name, 2000)
 
 print("mean in subsampled labels:", metrics)
 print("Total time:", time.time()-start)

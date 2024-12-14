@@ -3,8 +3,8 @@ mkdir -p models
 
 beam_width=10;
 sample_rate=0.1;
+for data in "amazon-670k-pecos";
 #for data in "eur-lex" "amazoncat-13k" "amazon-670k-pecos";
-for data in "amazoncat-13k" ;
 do
   #for seed in 1 2 3 4 5 6 7 27 100 9527;
   for seed in 1;
@@ -39,4 +39,3 @@ do
     fi
   done
 done
-

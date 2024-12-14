@@ -3,8 +3,8 @@ mkdir -p models
 
 num_models=10
 K=10
-for data in  "amazoncat-13k";
-#for data in "amazon-670k-pecos";
+#for data in  "amazoncat-13k";
+for data in "amazon-670k-pecos";
 do
   for seed in 1 2 3 4 5 6 7 27 100 9527;
   #for seed in 100;
