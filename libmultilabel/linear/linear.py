@@ -71,7 +71,8 @@ class FlatModel:
         if type(self.weights) != sparse.csr_matrix(np.ones(1)):
             self.weights = sparse.csr_matrix(self.weights)
         import sparse_dot_mkl as sdm
-        return sdm.dot_product_mkl(x, self.weights).A + self.thresholds # for tree
+        return sdm.dot_product_mkl(x, self.weights, dense=True) + self.thresholds # for tree
+        #return sdm.dot_product_mkl(x, self.weights).A + self.thresholds # for tree
         # return (x * self.weights).A + self.thresholds
 
 
