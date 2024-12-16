@@ -1,7 +1,7 @@
 
 mkdir -p csr_models
 
-input_dir=models
+input_dir=csc_models
 output_dir=csr_models
 
 #f="Rand-label-partitions-No-replacement_wiki10-31k_seed=27_K=100_sample-rate=0.1.model-0"
