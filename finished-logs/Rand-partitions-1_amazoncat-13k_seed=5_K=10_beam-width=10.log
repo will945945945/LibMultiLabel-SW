@@ -1,0 +1,35 @@
+start
+data loading cost: 0.6861460208892822
+process batches id: 0
+process batches id: 1
+process batches id: 2
+process batches id: 3
+process batches id: 4
+process batches id: 5
+process batches id: 6
+process batches id: 7
+process batches id: 8
+process batches id: 9
+process batches id: 10
+process batches id: 11
+process batches id: 12
+process batches id: 13
+process batches id: 14
+process batches id: 15
+process batches id: 16
+process batches id: 17
+process batches id: 18
+process batches id: 19
+process batches id: 20
+process batches id: 21
+process batches id: 22
+process batches id: 23
+process batches id: 24
+process batches id: 25
+process batches id: 26
+process batches id: 27
+process batches id: 28
+process batches id: 29
+process batches id: 30
+mean in subsampled labels: {'P@1': 0.9247446069195715, 'P@3': 0.779774128425614, 'P@5': 0.6314451304183427}
+Total time: 315.4542098045349
