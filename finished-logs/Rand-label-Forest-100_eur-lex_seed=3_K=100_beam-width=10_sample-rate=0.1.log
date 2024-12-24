@@ -1,0 +1,5 @@
+start
+data loading cost: 0.34645533561706543
+process batches id: 0
+mean in subsampled labels: {'P@1': 0.8271668822768434, 'P@3': 0.6988357050452781, 'P@5': 0.5871668822768434}
+Total time: 73.89663290977478
