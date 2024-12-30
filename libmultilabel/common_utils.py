@@ -6,6 +6,7 @@ import time
 from functools import wraps
 
 import numpy as np
+from scipy.special import log_expit, expit
 
 
 class AttributeDict(dict):
@@ -141,3 +142,62 @@ def timer(func):
         return value
 
     return wrapper
+
+def l1_hinge_loss(x):
+    '''return max(0, 1 - x)
+    '''
+    return np.maximum(0, 1 - x)
+
+def l2_hinge_loss(x):
+    '''return max(0, 1 - x)^2
+    '''
+    return np.maximum(0, 1 - x)**2
+
+def decision_value_to_prob(decision_values, model_type, prob_type, use_log_prob, alpha=1.0, eps=1e-8):
+    '''return probability corresponding to a specific model and probability transformation function
+    Args:
+        decision_values: decision values of a linear model ``wTx``
+        model_type: type of linear models, ``l2svm``, ``l1svm``, and ``lr``
+        prob_type: type of probability transformation functions, ``Exp`` and ``Prob``
+        use_log_prob: If set to ``True``, return ``log(prob)``
+        alpha: the corresponding parameter in the ``Prob`` probability transformation function ``sigmoid(-0.5*alpah*(loss(wTx) - loss(-wTx)))``
+            Default: 1.0
+        eps: a scalar close to zero, which is used to avoid numerical issues when calculating cross entropy
+            Default: 1e-8
+    '''
+    model_type = model_type.lower()
+    prob_type = prob_type.lower()
+    assert model_type in ["l2svm", "l1svm", "lr"], "Our experiments only cover three kinds of models: l2-SVM, l1-SVM, and LR."
+    assert prob_type in ["exp", "prob"], "There are only two kinds of probability transformation functions: Exp and Prob."
+    assert not (model_type == "lr" and prob_type == "prob"), "Logits from Logistic Regression only support Exp."
+
+    loss_func = l2_hinge_loss if model_type == "l2svm" else l1_hinge_loss
+    if model_type != "lr":
+        if prob_type == "prob":
+            if use_log_prob:
+                # log_sigmoid(-0.5*alpah*(loss(wTx) - loss(-wTx))) for l1/l2-SVM when using Prob
+                return log_expit(-0.5 * alpha * (loss_func(decision_values) - loss_func(-decision_values)))
+            else:
+                # sigmoid(-0.5*alpah*(loss(wTx) - loss(-wTx))) for l1/l2-SVM when using Prob
+                prob = expit(-0.5 * alpha * (loss_func(decision_values) - loss_func(-decision_values)))
+                return np.where(prob == 1, # condition
+                                1.0 - eps, # for wTx >= 1.0, add eps to avoid numerical issues when calculating cross entropy
+                                prob
+                               )
+        else:
+            if use_log_prob:
+                # -loss(wTx) for l1/l2-SVM when using Exp
+                return -loss_func(decision_values)
+            else:
+                # exp(-loss(wTx)) for l1/l2-SVM when using Exp
+                return np.where(decision_values >= 1, # condition
+                                1.0 - eps, # for wTx >= 1.0, add eps to avoid numerical issues when calculating cross entropy
+                                np.exp(-loss_func(decision_values))
+                               )
+    else:
+        if use_log_prob:
+            # log_sigmoid(wTx) for LR
+            return log_expit(decision_values)
+        else:
+            # sigmoid(wTx) for LR
+            return expit(decision_values)
