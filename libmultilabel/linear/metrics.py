@@ -3,6 +3,9 @@ from __future__ import annotations
 import re
 
 import numpy as np
+import scipy as sp
+from sklearn.metrics import log_loss
+from scipy.special import log_expit, xlogy
 
 __all__ = ["get_metrics", "compute_metrics", "tabulate_metrics", "MetricCollection"]
 
@@ -310,6 +313,10 @@ def get_metrics(monitor_metrics: list[str], num_classes: int, multiclass: bool =
             metrics[metric] = NDCGAtK(top_k=int(metric[5:]))
         elif metric in {"Another-Macro-F1", "Macro-F1", "Micro-F1"}:
             metrics[metric] = F1(num_classes, average=metric[:-3].lower(), multiclass=multiclass)
+        elif metric == "CrossEntropy":
+            metrics[metric] = CrossEntropy(with_logits=False)
+        elif metric == "CrossEntropyWithLogits":
+            metrics[metric] = CrossEntropy(with_logits=True)
         else:
             raise ValueError(f"invalid metric: {metric}")
 
@@ -362,3 +369,29 @@ def tabulate_metrics(metric_dict: dict[str, float], split: str) -> str:
 def _check_top_k(k):
     if not (isinstance(k, int) and k > 0):
         raise ValueError('"k" has to be a positive integer')
+
+def cross_entropy_with_logits(y, p):
+    return -np.sum(y * log_expit(p) + (1 - y) * log_expit(-p))
+
+def cross_entropy(y, p):
+    return -np.sum(xlogy(y, p) + xlogy(1 - y, 1 - p))
+
+class CrossEntropy:
+    def __init__(self, with_logits):
+        self.score = 0
+        self.num_sample = 0
+        self.with_logits = with_logits
+
+    def update(self, preds: np.ndarray, target: np.ndarray):
+        if self.with_logits:
+            self.score += cross_entropy_with_logits(target, preds)
+        else:
+            self.score += cross_entropy(target, preds)
+        self.num_sample += preds.shape[0] * preds.shape[1]
+
+    def compute(self) -> float:
+        return self.score / self.num_sample
+
+    def reset(self):
+        self.score = self.num_sample = 0
+
