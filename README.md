@@ -50,7 +50,9 @@ cd datasets
 ./train_models.sh
 ```
 
-### Conduct Experiments
+### Reproduce Experiments
 
-Leave to do.
-
+```
+cd svm2prob_binary
+python check_svm2prob_binary_cls.py
+```
