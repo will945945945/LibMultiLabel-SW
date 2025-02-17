@@ -17,7 +17,7 @@ conda activate $ENV_NAME
 
 # Installing libraries in requirements.txt
 echo "Installing libraries in requirements.txt"
-conda install python-graphviz anaconda::mkl
+conda install -y python-graphviz anaconda::mkl
 cat requirements.txt | xargs -n 1 -L 1 pip3 install
 
 echo "Setup complete. Activate the conda environment using: conda activate $ENV_NAME"

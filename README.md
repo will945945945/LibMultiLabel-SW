@@ -17,3 +17,40 @@ If you have a different version of CUDA, follow the installation instructions fo
 
 ## Documentation
 See the documentation here: https://www.csie.ntu.edu.tw/~cjlin/libmultilabel
+
+## For Probability Estimation on Binary Classification Datasets
+
+### Install/Remove Environment
+
+- For installing
+```
+make all
+```
+
+- For removing
+```
+make clean
+```
+
+- For activating the environment
+```
+conda activate tree_prob
+```
+
+### Prepare data
+
+```
+cd datasets
+./prepare_data.sh
+```
+
+### Train models
+
+```
+./train_models.sh
+```
+
+### Conduct Experiments
+
+Leave to do.
+

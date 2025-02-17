@@ -14,8 +14,7 @@ train_cmd="${train_cmd} --monitor_metrics P@1"
 
 for mode in trva trvate
 do
-    for dset in real-sim rcv1 ijcnn1 webspam
-    #for dset in a9a #real-sim rcv1 ijcnn1 webspam
+    for dset in a9a real-sim rcv1 ijcnn1 webspam
     do
         for mname in l1svm l2svm lr
         do
