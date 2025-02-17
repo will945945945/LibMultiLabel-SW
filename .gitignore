@@ -140,6 +140,8 @@ model_output/*
 *.xlsx
 tmp*
 *.csv
+*.png
+*.eps
 *report*.txt
 *.pkl
 *.txt
