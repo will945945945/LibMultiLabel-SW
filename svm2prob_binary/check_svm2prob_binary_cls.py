@@ -6,7 +6,7 @@
 
 import sys
 import os
-
+from platt_scaling import sigmoid_train
 # Add the parent directory to sys.path
 # parent_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 parent_dir = os.path.abspath("..")
@@ -39,7 +39,7 @@ def l2_hinge_loss(x):
     '''
     return np.maximum(0, 1 - x)**2
 
-def decision_value_to_prob(decision_values, model_type, prob_type, use_log_prob, alpha=1.0, eps=1e-8):
+def decision_value_to_prob(decision_values, target, model_type, prob_type, use_log_prob, alpha=1.0, eps=1e-8):
     '''return probability corresponding to a specific model and probability transformation function
     Args:
         decision_values: decision values of a linear model ``wTx``
@@ -54,7 +54,7 @@ def decision_value_to_prob(decision_values, model_type, prob_type, use_log_prob,
     model_type = model_type.lower()
     prob_type = prob_type.lower()
     assert model_type in ["l2svm", "l1svm", "lr"], "Our experiments only cover three kinds of models: l2-SVM, l1-SVM, and LR."
-    assert prob_type in ["exp", "prob"], "There are only two kinds of probability transformation functions: Exp and Prob."
+    assert prob_type in ["exp", "prob", "platt"], "There are only two kinds of probability transformation functions: Exp and Prob."
     assert not (model_type == "lr" and prob_type == "prob"), "Logits from Logistic Regression only support Exp."
 
     loss_func = l2_hinge_loss if model_type == "l2svm" else l1_hinge_loss
@@ -67,6 +67,12 @@ def decision_value_to_prob(decision_values, model_type, prob_type, use_log_prob,
                 # sigmoid(-0.5*alpah*(loss(wTx) - loss(-wTx))) for l1/l2-SVM when using Prob
                 prob = expit(-0.5 * alpha * (loss_func(decision_values) - loss_func(-decision_values)))
                 return np.where(prob == 1, # condition
+                                1.0 - eps, # for wTx >= 1.0, add eps to avoid numerical issues when calculating cross entropy
+                                prob
+                               )
+        elif prob_type == "platt":
+            prob = sigmoid_train(decision_values, target)
+            return np.where(prob == 1, # condition
                                 1.0 - eps, # for wTx >= 1.0, add eps to avoid numerical issues when calculating cross entropy
                                 prob
                                )
@@ -108,7 +114,7 @@ def metrics_in_batches(model, batch_size, datasets, model_type, prob_types, posi
         target = datasets["y"][i * batch_size : (i + 1) * batch_size].toarray()[:, positive_label_idx][:, np.newaxis]
         for pt in prob_types:
             prob_type, alpha = pt.split("-")
-            probs = decision_value_to_prob(preds, model_type, prob_type, use_log_prob=False, alpha=float(alpha))
+            probs = decision_value_to_prob(preds, target, model_type, prob_type, use_log_prob=False, alpha=float(alpha))
             # print(pt, probs.shape, f"{probs.min():.4e}", f"{probs.max():.4e}")
             metrics[pt].update(probs, target)
     for pt in prob_types:
@@ -121,6 +127,7 @@ def metrics_in_batches(model, batch_size, datasets, model_type, prob_types, posi
 
 
 prob_types = list(f"prob-{_a}" for _a in np.arange(1, 4, 0.5))
+prob_types.extend(["platt-0"])
 prob_alpha_num = len(prob_types)
 prob_types.extend(list(f"exp-{_a}" for _a in np.arange(1, 4, 0.5)))
 data_names = ["a9a", "ijcnn1", "webspam", "real-sim", "rcv1"]
@@ -186,12 +193,16 @@ def plot_grouped_lines(df, mode, entropy, ax):
     for i, model_type in enumerate(model_types):
         model_df = filtered_df[filtered_df['model_type'] == model_type]
         # print(model_df.to_string(index=False))
-
         if model_type != "lr":
             marker, prob_type = "o", "Prob"
-            x = model_df['prob_type'].apply(lambda x: float(x.split("-")[-1]))[:-1]
-            y_tr = model_df['tr_NLL'][:-1]
-            y_te = model_df['te_NLL'][:-1]
+            x = model_df['prob_type'].apply(lambda x: float(x.split("-")[-1]))[:-2]
+            y_tr = model_df['tr_NLL'][:-2]
+            y_te = model_df['te_NLL'][:-2]
+
+            y_tr_platt = model_df['tr_NLL'].iloc[-2]
+            y_te_platt = model_df['te_NLL'].iloc[-2]
+            ax.axhline(y=y_tr_platt, color="w", label=f'{model_type} - Platt - NLL_on_{mode}', marker = "v")
+            ax.axhline(y=y_te_platt, color="w", linestyle=':', label=f'{model_type} - Platt - NLL_on_te', marker = "v")
         else:
             marker, prob_type = "*", "Exp"
             x = model_df['prob_type'].apply(lambda x: float(x.split("-")[-1]))[:]
