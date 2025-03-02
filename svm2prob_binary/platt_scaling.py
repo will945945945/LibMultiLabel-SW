@@ -45,7 +45,6 @@ def sigmoid_train(dec_values, labels):
     # Call the C function
     libsvm.sigmoid_train(l, dec_values_c, labels_c, byref(A), byref(B))
 
-    prob = np.array([sigmoid_predict(float(x), A.value, B.value) for x in dec_values])
-    return np.expand_dims(prob, axis=-1)
+    return A.value, B.value
 
 
