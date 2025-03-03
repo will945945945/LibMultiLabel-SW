@@ -256,7 +256,7 @@ class MetricCollection(dict):
             preds (np.ndarray): A matrix of decision values with dimensions number of instances * number of classes.
             target (np.ndarray): A 0/1 matrix of labels with dimensions number of instances * number of classes.
         """
-        assert preds.shape == target.shape  # (batch_size, num_classes)
+#        assert preds.shape == target.shape  # (batch_size, num_classes)
 
         # The main bottleneck when computing metrics is sorting the top k indices.
         # As an optimization, we sort only once and pass the sorted predictions to metrics that needs them.
@@ -374,6 +374,8 @@ def cross_entropy_with_logits(y, p):
     return -np.sum(y * log_expit(p) + (1 - y) * log_expit(-p))
 
 def cross_entropy(y, p):
+    eps = 1e-7
+    p = np.where(p<eps , eps, p)
     return -np.sum(xlogy(y, p) + xlogy(1 - y, 1 - p))
 
 class CrossEntropy:

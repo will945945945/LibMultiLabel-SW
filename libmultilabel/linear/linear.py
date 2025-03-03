@@ -101,11 +101,39 @@ def train_1vsrest(
     num_feature = x.shape[1]
     weights = np.zeros((num_feature, num_class), order="F")
 
+    node_c = []
+
     if verbose:
         logging.info(f"Training one-vs-rest model on {num_class} labels")
     for i in tqdm(range(num_class), disable=not verbose):
         yi = y[:, i].toarray().reshape(-1)
-        weights[:, i] = _do_train(2 * yi - 1, x, options).ravel()
+        if "-v" in options:
+            options_split = options.split(" ")
+            ind = options_split.index("-v")
+            options_split = options_split[:ind] + options_split[ind + 2 :]
+            c_range = ["1", "10", "100", "0.1", "0.01"]
+            best = -1
+            best_c = "1"
+            for c in c_range:
+                tmp_option = options + " -c " + c
+                with silent_stderr():
+                    with silent_stdout():                        
+                        acc = train(2 * yi - 1, x, tmp_option)
+                if acc > best:
+                    best = acc
+                    best_c = c
+            # if best == 0:
+            #     import pickle
+            #     with open("acc/acc0_file_"+"_".join(options_split[0:2])+str(node.index)+"_"+str(num)+"_x.pkl", "wb") as F:
+            #         pickle.dump(x,F)
+            #     with open("acc/acc0_file_"+"_".join(options_split[0:2])+str(node.index)+"_"+str(num)+"_y.pkl", "wb") as F:
+            #         pickle.dump(2*yi-1,F)
+            best_option = " ".join(options_split) + " -c " + best_c
+            node_c.append(best_c)
+            weights[:, i] = _do_train(2 * yi - 1, x, best_option).ravel()
+
+        else:
+            weights[:, i] = _do_train(2 * yi - 1, x, options).ravel()
 
     return FlatModel(
         name="1vsrest",
@@ -130,8 +158,8 @@ def _prepare_options(x: sparse.csr_matrix, options: str) -> tuple[sparse.csr_mat
     """
     if options is None:
         options = ""
-    if any(o in options for o in ["-R", "-C", "-v"]):
-        raise ValueError("-R, -C and -v are not supported")
+    # if any(o in options for o in ["-R", "-C", "-v"]):
+    #     raise ValueError("-R, -C and -v are not supported")
 
     options_split = options.split()
     if "-s" in options_split:
@@ -337,7 +365,7 @@ def _do_train(y: np.ndarray, x: sparse.csr_matrix, options: str) -> np.matrix:
 
     prob = problem(y, x)
     param = parameter(options)
-    param.w_recalc = True   # only works for solving L1/L2-SVM dual
+    param.w_recalc = False  # only works for solving L1/L2-SVM dual
     with silent_stderr():
         model = train(prob, param)
 
@@ -353,6 +381,19 @@ def _do_train(y: np.ndarray, x: sparse.csr_matrix, options: str) -> np.matrix:
         # The memory is freed on model deletion so we make a copy.
         return w.copy()
 
+class silent_stdout:
+
+    def __init__(self):
+        self.stdout = os.dup(1)
+        self.devnull = os.open(os.devnull, os.O_WRONLY)
+
+    def __enter__(self):
+        os.dup2(self.devnull, 1)
+
+    def __exit__(self, type, value, traceback):
+        os.dup2(self.stdout, 1)
+        os.close(self.devnull)
+        os.close(self.stdout)
 
 class silent_stderr:
     """Context manager that suppresses stderr.

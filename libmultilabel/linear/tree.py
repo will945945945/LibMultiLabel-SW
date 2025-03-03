@@ -6,6 +6,7 @@ import numpy as np
 import scipy.sparse as sparse
 import sklearn.cluster
 import sklearn.preprocessing
+from scipy.special import log_expit, xlogy, expit
 from tqdm import tqdm
 import psutil
 
@@ -27,6 +28,7 @@ class Node:
         """
         self.label_map = label_map
         self.children = children
+        self.is_root = False
 
     def isLeaf(self) -> bool:
         return len(self.children) == 0
@@ -108,6 +110,7 @@ class TreeModel:
                     children_score = score - np.maximum(0, 1 - pred) 
                 elif prob_type == "sigmoid":
                     children_score = score - np.log(1 + np.exp(-A * pred))
+                    # children_score = score + log_expit(-A * pred)
                 # elif prob_type == "hardtanh":
                 #     prob = (np.maximum( -1, np.minimum(1, pred) ) + 1)/2
                 #     children_score = score + np.log(np.maximum(1e-16, prob)) 
@@ -137,6 +140,7 @@ class TreeModel:
                 scores[node.label_map] = np.exp(score - np.maximum(0, 1 - pred))
             elif prob_type == "sigmoid":
                 scores[node.label_map] = np.exp(score - np.log(1 + np.exp(-A * pred)) )
+                # scores[node.label_map] = np.exp(score + log_expit(-A * pred))
             #     prob = (np.maximum( -1, np.minimum(1, pred/6) ) + 1)/2
             #     scores[node.label_map] = np.exp(score + np.log(np.maximum(1e-16, prob)) )
             # elif prob_type == "square-like-sigmoid":
@@ -157,7 +161,9 @@ def get_tree_structure(
 ) -> Node:
     label_representation = (y.T * x).tocsr()
     label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
-    return _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
+    root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
+    root.is_root = True
+    return root
 
 def train_tree(
     y: sparse.csr_matrix,
