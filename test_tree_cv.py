@@ -34,6 +34,7 @@ def metrics_in_batches(model, batch_size, metrics_for_eval, prob_alpha):
     num_instances = data_x.shape[0]
     num_batches = math.ceil(num_instances / batch_size)
 
+    metrics = {}
     metrics.update({prob+str(alpha): linear.get_metrics(metrics_for_eval, num_classes=data_y.shape[1]) for prob, alpha in prob_alpha})
     for i in tqdm(range(num_batches)):
         tmp_data = data_x[i * batch_size : (i + 1) * batch_size]
@@ -57,7 +58,6 @@ for i in range(5):
 prob_A = [(prob, A) for prob in probtype_A for A in A_range]
 A_score = {str(A):{k:0. for k in metrics_for_eval} for A in A_range} 
 for i in range(5):
-    print("split", i)
     modelpath = ARGS.modelname+"_5folds_"+str(i+1)+".pkl"
     with open(modelpath, "rb") as F:
         model = pickle.load(F)['model']
@@ -88,7 +88,7 @@ best_A = {}
 eval = {}
 data_x = datasets["test"]["x"]
 data_y = datasets["test"]["y"]
-prob_A = {}
+prob_A = []
 bests = {"P@1":0, "P@3":0, "P@5":0 }
 for key in metrics_for_eval:
     re_organized_score = {A:A_score[A][key] for A in A_score.keys()}
