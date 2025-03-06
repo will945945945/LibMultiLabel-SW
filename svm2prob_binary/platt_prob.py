@@ -37,7 +37,7 @@ def metrics_in_batches(model, batch_size, datasets, positive_label_idx, A, B):
     return metrics
 
 
-data_names = ["a9a", "ijcnn1", "webspam", "real-sim", "rcv1"]
+data_names = ["a9a", "ijcnn1", "webspam", "real-sim", "rcv1", "rcv1_reverse"]
 model_types = ["l2svm", "l1svm"]
 modes = ["trvate", "trva"]
 df_cols = "dataset,mode,model_type,tr_NLL,te_NLL,A,B".split(",")
