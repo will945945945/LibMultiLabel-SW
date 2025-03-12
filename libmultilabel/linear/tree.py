@@ -109,8 +109,8 @@ class TreeModel:
                 elif prob_type == "exp-L1":
                     children_score = score - np.maximum(0, 1 - pred) 
                 elif prob_type == "sigmoid":
-                    children_score = score - np.log(1 + np.exp(-A * pred))
-                    # children_score = score + log_expit(-A * pred)
+                    #children_score = score - np.log(1 + np.exp(-A * pred))
+                    children_score = score + log_expit(A * pred)
                 # elif prob_type == "hardtanh":
                 #     prob = (np.maximum( -1, np.minimum(1, pred) ) + 1)/2
                 #     children_score = score + np.log(np.maximum(1e-16, prob)) 
@@ -139,8 +139,8 @@ class TreeModel:
             elif prob_type == "exp-L1":
                 scores[node.label_map] = np.exp(score - np.maximum(0, 1 - pred))
             elif prob_type == "sigmoid":
-                scores[node.label_map] = np.exp(score - np.log(1 + np.exp(-A * pred)) )
-                # scores[node.label_map] = np.exp(score + log_expit(-A * pred))
+                #scores[node.label_map] = np.exp(score - np.log(1 + np.exp(-A * pred)) )
+                scores[node.label_map] = np.exp(score + log_expit(A * pred))
             #     prob = (np.maximum( -1, np.minimum(1, pred/6) ) + 1)/2
             #     scores[node.label_map] = np.exp(score + np.log(np.maximum(1e-16, prob)) )
             # elif prob_type == "square-like-sigmoid":

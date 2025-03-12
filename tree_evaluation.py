@@ -19,7 +19,7 @@ parser.add_argument('--modeltype', type=str, default="l2")
 ARGS = parser.parse_args()
 
 probtype_A = ["sigmoid"]
-A_range = [1.,1.5,2.,2.5,3.,3.5,4.,5.,6.,7.,8.,9.,]
+A_range = [1., 1.5, 2., 2.5, 3., 3.5, 4., 4.5, 5., 6., 7., 8., 9., 16., 32, 64]
 
 metrics_for_eval = ["P@1", "P@3", "P@5", "CrossEntropy"]
 

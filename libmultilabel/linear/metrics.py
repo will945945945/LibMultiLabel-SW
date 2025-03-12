@@ -375,8 +375,14 @@ def cross_entropy_with_logits(y, p):
 
 def cross_entropy(y, p):
     eps = 1e-7
-    p = np.where(p<eps , eps, p)
-    return -np.sum(xlogy(y, p) + xlogy(1 - y, 1 - p))
+    p = np.where(p < 0, 0, p)
+    p1 = np.where(p < eps , eps, p)
+    p2 = np.where(1 - p < eps , eps, 1 - p)
+    # s = -np.sum(xlogy(y, p1) + xlogy(1 - y, p2))
+    # if s == -np.inf:
+    #     print(np.max(p1), np.max(p2))
+    #     print(np.max(xlogy(1 - y, p1)), np.max(xlogy(1 - y, p2)))
+    return -np.sum(xlogy(y, p1) + xlogy(1 - y, p2))
 
 class CrossEntropy:
     def __init__(self, with_logits):

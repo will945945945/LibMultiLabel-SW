@@ -27,7 +27,7 @@ full_preds = []
 # probtype_A = ["L1-prob", "L2-prob"]
 probtype_A = ["sigmoid"]
 #probtype = ["L1-prob", "L2-prob"]
-A_range = [1.,1.5,2.,2.5,3.,3.5,4.,5.,6.,7.,8.,9.,]
+A_range = [1., 1.5, 2., 2.5, 3., 3.5, 4., 4.5, 5., 6., 7., 8., 9., 16., 32, 64]
 metrics_for_eval = ["P@1", "P@3", "P@5"]
 
 def metrics_in_batches(model, batch_size, metrics_for_eval, prob_alpha):
