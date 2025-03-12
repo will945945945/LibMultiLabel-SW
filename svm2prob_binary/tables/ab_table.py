@@ -19,7 +19,7 @@ def load_and_process_csv(folder, method_name):
 
     return pd.concat(data_list, ignore_index=True) if data_list else pd.DataFrame()
 
-def merge_methods(df_platt, df_prob_lr):
+def merge_methods(df_platt, df_prob_lr, df_platt_A):
     return pd.merge(df_prob_lr, df_platt, on=["dataset", "model_type"], how="outer")
 
 def format_latex_table(df):
@@ -64,19 +64,21 @@ def format_latex_table(df):
     return latex_table
 
 # Define paths for the two methods
-folder_platt = "tune/platt"
-folder_prob_lr = "tune/alpha"
+folder_platt = "no_tune/platt"
+folder_prob_lr = "no_tune/alpha"
+folder_platt_A = "no_tune/platt_A"
 
 # Load CSVs
 df_platt = load_and_process_csv(folder_platt, "Platt")
 df_prob_lr = load_and_process_csv(folder_prob_lr, "Alpha")
+df_platt_A = load_and_process_csv(folder_platt_A, "Platt_A")
 # Merge methods based on dataset and model_type
-final_df = merge_methods(df_platt, df_prob_lr)
+final_df = merge_methods(df_platt, df_prob_lr, df_platt_A)
 
 # Generate LaTeX table
 latex_table = format_latex_table(final_df)
 
 # Print and save
 print(latex_table)
-with open("ab_table.tex", "w") as f:
+with open("ab_table_no_tune.tex", "w") as f:
     f.write(latex_table)

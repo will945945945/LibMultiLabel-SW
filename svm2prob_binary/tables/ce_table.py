@@ -84,21 +84,23 @@ def format_latex_table(df):
     return latex_table
 
 # Define the paths to your CSV folders for the two methods
-folder1 = "no_tune/platt"  # Replace with your actual path
-folder2 = "no_tune/alpha"  # Replace with your actual path
-folder3 = "no_tune/franc"  
+folder1 = "tune/platt"  # Replace with your actual path
+folder2 = "tune/alpha"  # Replace with your actual path
+folder3 = "tune/franc"
+folder4 = "tune/platt_A"
 
 # Load and process the CSV data for each method
 df_method1 = load_and_process_csv(folder1, "Platt")
 df_method2 = load_and_process_csv(folder2, "Alpha")
 df_method3 = load_and_process_csv(folder3, "Franc")
+df_method4 = load_and_process_csv(folder4, "Platt_A")
 
 # Combine the data from both methods
-final_df = pd.concat([df_method1, df_method2, df_method3])
+final_df = pd.concat([df_method1, df_method2, df_method3, df_method4])
 # Generate the LaTeX table
 latex_table = format_latex_table(final_df)
 
 # Print and save the LaTeX table code
 print(latex_table)
-with open("ce_table_no_tuned.tex", "w") as f:
+with open("ce_table_tune.tex", "w") as f:
     f.write(latex_table)
