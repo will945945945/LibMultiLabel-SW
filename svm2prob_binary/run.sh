@@ -1,4 +1,8 @@
-python alpha_prob.py
-python platt_prob.py
-python franc_prob.py
-python platt_A_prob.py
+# python alpha_prob.py ../models/runs_tuned
+# python alpha_prob.py ../models/runs_untuned
+# python platt_prob.py ../models/runs_tuned
+# python platt_prob.py ../models/runs_untuned
+# python franc_prob.py ../models/runs_tuned
+# python franc_prob.py ../models/runs_untuned
+python platt_A_prob.py ../models/runs_tuned
+python platt_A_prob.py ../models/runs_untuned

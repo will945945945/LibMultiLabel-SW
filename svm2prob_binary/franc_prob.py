@@ -70,7 +70,8 @@ data_names = ["a9a", "ijcnn1", "webspam", "real-sim", "rcv1", "rcv1_reverse"]
 model_types = ["l2svm", "l1svm"]
 modes = ["trvate", "trva"]
 df_cols = "dataset,mode,model_type,tr_NLL,te_NLL,alpha".split(",")
-
+import sys
+root = sys.argv[1]
 pbar_dn = tqdm(data_names)
 for dn in pbar_dn:
     pbar_dn.set_description(f"Dataset: {dn}")
@@ -79,7 +80,7 @@ for dn in pbar_dn:
         for mode in modes:
 
             # Load linear model
-            logs_dir = f"../runs/{mode}"
+            logs_dir = f"{root}/{mode}"
             model_path_prefix = f"{dn}_{model_type}_c"
             model_path = sorted([os.path.join(logs_dir, _d) for _d in os.listdir(logs_dir) if _d.startswith(model_path_prefix)])[-1]
             ARGS = {
@@ -109,4 +110,7 @@ for dn in pbar_dn:
             for col in df_cols:
                 df[col].append(eval(col) if col != "dataset" else eval("dn"))
     df = pd.DataFrame(df)
-    df.to_csv(f"{dn}_franc.csv", index=False)
+    if root == "../models/runs_tuned":
+        df.to_csv(f"tables/tune/franc/{dn}_franc.csv", index=False)
+    else:
+        df.to_csv(f"tables/no_tune/franc/{dn}_franc.csv", index=False)

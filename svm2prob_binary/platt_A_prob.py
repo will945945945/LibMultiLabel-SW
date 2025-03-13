@@ -40,14 +40,15 @@ def metrics_in_batches(model, batch_size, datasets, positive_label_idx, A):
 data_names = ["a9a", "ijcnn1", "webspam", "real-sim", "rcv1", "rcv1_reverse"]
 model_types = ["l2svm", "l1svm"]
 modes = ["trvate", "trva"]
-df_cols = "dataset,mode,model_type,tr_NLL,te_NLL,A".split(",")
-
+df_cols = "dataset,mode,model_type,tr_NLL,te_NLL,onlyA".split(",")
+import sys
+root = sys.argv[1]
 for dn in tqdm(data_names):
     df = {_c: [] for _c in df_cols}
     for model_type in model_types:
         for mode in modes:
             # Load linear model and dataset.
-            logs_dir = f"../runs/{mode}"
+            logs_dir = f"{root}/{mode}"
             model_path_prefix = f"{dn}_{model_type}_c"
             model_path = sorted([os.path.join(logs_dir, _d) for _d in os.listdir(logs_dir) if _d.startswith(model_path_prefix)])[-1]
             ARGS = {
@@ -68,14 +69,17 @@ for dn in tqdm(data_names):
             # Train Platt model.
             preds = model.predict_values(datasets["train"]["x"])[:, positive_label_idx][:, np.newaxis]
             target = datasets["train"]["y"].toarray()[:, positive_label_idx][:, np.newaxis]
-            A = sigmoid_train_A(preds, target)
+            onlyA = sigmoid_train_A(preds, target)
 
             # Calculate and evaluate probability.
-            tr_metrics = metrics_in_batches(model, 2**16, datasets["train"], positive_label_idx, A)
-            te_metrics = metrics_in_batches(model, 2**16, datasets["test"], positive_label_idx, A)
+            tr_metrics = metrics_in_batches(model, 2**16, datasets["train"], positive_label_idx, onlyA)
+            te_metrics = metrics_in_batches(model, 2**16, datasets["test"], positive_label_idx, onlyA)
             tr_NLL = tr_metrics["platt"]["CrossEntropy"]
             te_NLL = te_metrics["platt"]["CrossEntropy"]
             for col in df_cols:
                 df[col].append(eval(col) if col != "dataset" else eval("dn"))
     df = pd.DataFrame(df)
-    df.to_csv(f"{dn}_platt_A.csv", index=False)
+    if root == "../models/runs_tuned":
+        df.to_csv(f"tables/tune/platt_A/{dn}_platt_A.csv", index=False)
+    else:
+        df.to_csv(f"tables/no_tune/platt_A/{dn}_platt_A.csv", index=False)
