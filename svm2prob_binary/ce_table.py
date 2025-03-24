@@ -14,7 +14,7 @@ def load_and_process_csv(folder, method_name):
             df = df[df["mode"] == "trva"]
             df["method"] = method_name
             df = df[["dataset", "model_type", "method", "tr_NLL", "te_NLL", "tr_diff", "te_diff"]]
-            if method_name != "alpha":
+            if method_name != "alpha_ce":
                 df = df[df["model_type"] != "lr"]
             data_list.append(df)
     
@@ -93,7 +93,7 @@ def format_latex_table(df):
 import sys
 root = sys.argv[1]
 # Define paths for the two methods
-folders = f"table/{root}/*"
+folders = f"tables/{root}/*"
 from glob import glob
 folders = sorted(glob(folders))
 # Load CSVs
@@ -110,8 +110,8 @@ latex_table = format_latex_table(final_df)
 print(latex_table)
 os.makedirs(f"tables", exist_ok=True)
 if root == "no_tune":
-    with open(f"table/ce_table_no_tune.tex", "w") as f:
+    with open(f"tables/ce_table_no_tune.tex", "w") as f:
         f.write(latex_table)
 else:
-    with open(f"table/ce_table_tune.tex", "w") as f:
+    with open(f"tables/ce_table_tune.tex", "w") as f:
         f.write(latex_table)

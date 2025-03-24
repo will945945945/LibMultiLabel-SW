@@ -9,13 +9,17 @@ def load_and_process_csv(folder, method_name):
             df = pd.read_csv(os.path.join(folder, file))
 
             required_columns = {"dataset", "model_type"}
-            method_columns = {"platt": {"A", "B"}, "alpha": {"alpha"},  "platt_onlyA": {"A"}}.get(method_name, set())
+            method_columns = {"platt": {"A", "B"}, "alpha_ce": {"alpha"}, "alpha_diff": {"alpha"},  "platt_onlyA": {"A"}}.get(method_name, set())
             df = df[df["mode"] == "trva"]
             df["method"] = method_name
 
             df = df[list(required_columns) + list(method_columns)]
             if method_name == "platt_onlyA":
                 df = df.rename(columns={"A": "onlyA"})
+            if method_name == "alpha_ce":
+                df = df.rename(columns={"alpha": "alpha_ce"})
+            if method_name == "alpha_diff":
+                df = df.rename(columns={"alpha": "alpha_diff"})
             data_list.append(df)
 
     return pd.concat(data_list, ignore_index=True) if data_list else pd.DataFrame()
@@ -41,7 +45,8 @@ def format_latex_table(df):
         model_type = row["model_type"]
         if model_type == "lr":
             continue
-        best_alpha = row.get("alpha", "-")
+        alpha_ce = row.get("alpha_diff", "-")
+        alpha_diff = row.get("alpha_ce", "-")
         A = row.get("A", "-")
         B = row.get("B", "-")
         onlyA = row.get("onlyA", "-")
@@ -52,16 +57,16 @@ def format_latex_table(df):
 
         model_str = model_type if (dataset != last_dataset or model_type != last_model) else ""
         if model_str != "" and dataset_str == "":
-            latex_lines.append("\\cline{2-6}")
+            latex_lines.append("\\cline{2-7}")
 
-        latex_lines.append(f"{dataset_str} & {model_str} & {best_alpha:.2f} & {abs(onlyA):.2f} & {abs(A):.2f} & {B:.2f} \\\\")
+        latex_lines.append(f"{dataset_str} & {model_str} & {alpha_ce:.2f} & {alpha_diff:.2f} & {abs(onlyA):.2f} & {abs(A):.2f} & {B:.2f} \\\\")
 
         last_dataset = dataset
         last_model = model_type
 
     # Create LaTeX table structure
-    column_format = "llcccc"
-    header = "Dataset & Model Type & Best Alpha & $\\mid\\text{onlyA}\\mid$ & $\\mid\\text{A}\\mid$ & B \\\\"
+    column_format = "llccccc"
+    header = "Dataset & Model Type & Alpha_CE & Alpha_Diff & $\\mid\\text{onlyA}\\mid$ & $\\mid\\text{A}\\mid$ & B \\\\"
     latex_table = "\\begin{tabular}{" + column_format + "}\n" + header + "\n"
     latex_table += "\n".join(latex_lines)
     latex_table += "\n\\hline\n\\end{tabular}"
@@ -71,7 +76,7 @@ def format_latex_table(df):
 import sys
 root = sys.argv[1]
 # Define paths for the two methods
-folders = f"{root}/*"
+folders = f"tables/{root}/*"
 from glob import glob
 folders = sorted(glob(folders))
 
@@ -84,7 +89,6 @@ for i in folders:
 
 # Merge methods based on dataset and model_type
 df = merge_methods(csvs)
-
 # Generate LaTeX table
 latex_table = format_latex_table(df)
 
@@ -92,8 +96,8 @@ latex_table = format_latex_table(df)
 print(latex_table)
 os.makedirs(f"tables", exist_ok=True)
 if root == "no_tune":
-    with open(f"table/ab_table_no_tune.tex", "w") as f:
+    with open(f"tables/ab_table_no_tune.tex", "w") as f:
         f.write(latex_table)
 else:
-    with open(f"table/ab_table_tune.tex", "w") as f:
+    with open(f"tables/ab_table_tune.tex", "w") as f:
         f.write(latex_table)
