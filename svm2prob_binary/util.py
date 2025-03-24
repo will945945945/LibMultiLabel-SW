@@ -1,3 +1,4 @@
+import numpy as np
 from ctypes import *
 from ctypes.util import find_library
 from os import path
@@ -79,4 +80,8 @@ def sigmoid_train_A(dec_values, labels):
 
     return A.value
 
+def diff_term(norm, decision_values):
+    return np.where(1 - decision_values > 0, -2 * (1 - decision_values) * decision_values / norm, 0)
 
+def check_prob(norm, target, pos_probs, preds):
+    return (-diff_term(norm, target * preds) + pos_probs * diff_term(norm, preds) + (1 - pos_probs) * diff_term(norm, -preds)).sum(0).squeeze()
