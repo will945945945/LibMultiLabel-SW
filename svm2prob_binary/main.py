@@ -67,7 +67,7 @@ def metrics_in_batches(model, batch_size, datasets, model_type, positive_label_i
         preds = model.predict_values(tmp_data)[:, positive_label_idx][:, np.newaxis]
         target = datasets["y"][i * batch_size : (i + 1) * batch_size].toarray()[:, positive_label_idx][:, np.newaxis]
         probs = decision_value_to_prob(preds, prob_type, model_type, alpha, A, B)
-        res += check_prob(np.linalg.norm(model.weights), target, probs, preds)
+        res += check_prob(model_type, np.linalg.norm(model.weights), target, probs, preds)
         metrics.update(probs, target)
     metrics = metrics.compute()
     return metrics["CrossEntropy"], res
@@ -121,7 +121,7 @@ for prob_type in pbar_dn:
                 selection = prob_type.split("_")[1] if prob_type.startswith("alpha_") else None
 
                 if model_type == "lr":
-                    lamda_tau = 2 / C / np.linalg.norm(model.weights)
+                    lamda_tau = 2 / C * np.linalg.norm(model.weights)
 
                 if prob_type.startswith("alpha_"):
                     # Grid search Alpha value
@@ -134,7 +134,7 @@ for prob_type in pbar_dn:
                         tmp_metrics, tmp_res = metrics_in_batches(
                             model, 2**16, datasets["train"], model_type, positive_label_idx, prob_type=prob_type, alpha=tmp_alpha
                         )
-                        lamda_tau = 2 / C / np.linalg.norm(model.weights) / tmp_alpha
+                        lamda_tau = 2 / C * np.linalg.norm(model.weights) / tmp_alpha
                         tmp_diff = abs(tmp_res - lamda_tau)
                         if selection != "ce":
                             metric = tmp_diff
@@ -144,7 +144,7 @@ for prob_type in pbar_dn:
                             _min = metric
                             best_alpha = tmp_alpha
 
-                    lamda_tau = 2 / C / np.linalg.norm(model.weights) / best_alpha
+                    lamda_tau = 2 / C * np.linalg.norm(model.weights) / best_alpha
                     alpha = best_alpha
 
                 if prob_type == "platt":
@@ -152,7 +152,7 @@ for prob_type in pbar_dn:
                     preds = model.predict_values(datasets["train"]["x"])[:, positive_label_idx][:, np.newaxis]
                     target = datasets["train"]["y"].toarray()[:, positive_label_idx][:, np.newaxis]
 
-                    lamda_tau = 2 / C / np.linalg.norm(model.weights)
+                    lamda_tau = 2 / C * np.linalg.norm(model.weights)
                     A, B = sigmoid_train(preds, target)
 
                 if prob_type == "platt_onlyA":
@@ -160,11 +160,11 @@ for prob_type in pbar_dn:
                     preds = model.predict_values(datasets["train"]["x"])[:, positive_label_idx][:, np.newaxis]
                     target = datasets["train"]["y"].toarray()[:, positive_label_idx][:, np.newaxis]
 
-                    lamda_tau = 2 / C / np.linalg.norm(model.weights)
+                    lamda_tau = 2 / C * np.linalg.norm(model.weights)
                     A = sigmoid_train_A(preds, target)
 
                 if prob_type == "franc":
-                    lamda_tau = 2 / C / np.linalg.norm(model.weights)
+                    lamda_tau = 2 / C * np.linalg.norm(model.weights)
                     alpha = 1
 
                 tr_metrics, tr_res = metrics_in_batches(

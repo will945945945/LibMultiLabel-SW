@@ -80,8 +80,13 @@ def sigmoid_train_A(dec_values, labels):
 
     return A.value
 
-def diff_term(norm, decision_values):
-    return np.where(1 - decision_values > 0, -2 * (1 - decision_values) * decision_values / norm, 0)
+def diff_term(model_type, norm, decision_values):
+    if model_type == "l1svm":
+        return np.where(1 - decision_values > 0, -decision_values / norm, 0)
+    elif model_type == "l2svm":
+        return np.where(1 - decision_values > 0, -2 * (1 - decision_values) * decision_values / norm, 0)
+    else:
+        return 0
 
-def check_prob(norm, target, pos_probs, preds):
-    return (-diff_term(norm, target * preds) + pos_probs * diff_term(norm, preds) + (1 - pos_probs) * diff_term(norm, -preds)).sum(0).squeeze()
+def check_prob(model_type, norm, target, pos_probs, preds):
+    return (-diff_term(model_type, norm, target * preds) + pos_probs * diff_term(model_type, norm, preds) + (1 - pos_probs) * diff_term(model_type, norm, -preds)).sum(0).squeeze()
