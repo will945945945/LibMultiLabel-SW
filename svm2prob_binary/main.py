@@ -74,8 +74,7 @@ def metrics_in_batches(model, batch_size, datasets, model_type, positive_label_i
 
 
 data_names = ["a9a", "ijcnn1", "webspam", "real-sim", "rcv1", "rcv1_reverse"]
-# prob_types = ["franc", "alpha_ce", "alpha_diff", "platt", "platt_onlyA", "liblinear"]
-prob_types = ["liblinear"]
+prob_types = ["franc", "alpha_ce", "alpha_diff", "platt", "platt_onlyA", "liblinear"]
 
 model_types = ["l2svm", "l1svm", "lr"]
 modes = ["trvate", "trva"]
