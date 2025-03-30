@@ -34,7 +34,7 @@ def decision_value_to_prob(decision_values, prob_type, model_type, alpha=None, A
 
     loss_func = l2_hinge_loss if model_type == "l2svm" else l1_hinge_loss
 
-    if model_type == "lr":
+    if model_type == "lr" or prob_type == "liblinear":
         prob = expit(decision_values)
         return np.where(prob == 1, 1.0 - eps, prob)
     else:
@@ -74,7 +74,9 @@ def metrics_in_batches(model, batch_size, datasets, model_type, positive_label_i
 
 
 data_names = ["a9a", "ijcnn1", "webspam", "real-sim", "rcv1", "rcv1_reverse"]
-prob_types = ["franc", "alpha_ce", "alpha_diff", "platt", "platt_onlyA"]
+# prob_types = ["franc", "alpha_ce", "alpha_diff", "platt", "platt_onlyA", "liblinear"]
+prob_types = ["liblinear"]
+
 model_types = ["l2svm", "l1svm", "lr"]
 modes = ["trvate", "trva"]
 df_cols = "dataset,mode,model_type,tr_NLL,te_NLL,tr_diff,te_diff,alpha,A,B".split(",")
@@ -120,7 +122,7 @@ for prob_type in pbar_dn:
                 B = None
                 selection = prob_type.split("_")[1] if prob_type.startswith("alpha_") else None
 
-                if model_type == "lr":
+                if model_type == "lr" or prob_type == "liblinear":
                     lamda_tau = 2 / C * np.linalg.norm(model.weights)
 
                 if prob_type.startswith("alpha_"):
