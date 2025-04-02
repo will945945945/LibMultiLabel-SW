@@ -13,7 +13,7 @@ def load_and_process_csv(folder, method_name):
             df = pd.read_csv(os.path.join(folder, file))
             df = df[df["mode"] == "trva"]
             df["method"] = method_name
-            df = df[["dataset", "model_type", "method", "tr_NLL", "te_NLL", "tr_diff", "te_diff"]]
+            df = df[["dataset", "model_type", "method", "tr_NLL", "te_NLL", "tr_Acc", "te_Acc", "tr_diff", "te_diff"]]
             if method_name != "alpha_ce":
                 df = df[df["model_type"] != "lr"]
             data_list.append(df)
@@ -35,9 +35,11 @@ def format_latex_table(df):
         method = row["method"]
         tr_nll = row["tr_NLL"]
         te_nll = row["te_NLL"]
+        tr_acc = row["tr_Acc"]
+        te_acc = row["te_Acc"]
         if model_type != "lr":
             continue
-        lr.append([tr_nll, te_nll])
+        lr.append([tr_nll, te_nll, tr_acc, te_acc])
 
     cnt = 0
     for _, row in df.iterrows():
@@ -48,6 +50,8 @@ def format_latex_table(df):
             method = "Alpha"
         tr_nll = row["tr_NLL"]
         te_nll = row["te_NLL"]
+        tr_acc = row["tr_Acc"]
+        te_acc = row["te_Acc"]
         tr_diff = row["tr_diff"]
         te_diff = row["te_diff"]
 
@@ -66,16 +70,23 @@ def format_latex_table(df):
         rel_te_nll =  te_nll - lr[cnt][1]
         rel_te_ratio = rel_te_nll / lr[cnt][1]
 
+        rel_tr_acc =  tr_acc - lr[cnt][3]
+        rel_tr_acc_ratio = rel_tr_acc / lr[cnt][3]
+        rel_te_acc =  te_acc - lr[cnt][4]
+        rel_te_acc_ratio = rel_te_acc / lr[cnt][4]
+
         if model_type == "lr":
             cnt += 1
             latex_lines.append(
-            f"{dataset_str} & {model_str} & {method} & {tr_nll:.4f} & {te_nll:.4f} & & \\\\"
+            f"{dataset_str} & {model_str} & {method} & {tr_nll:.4f} & {te_nll:.4f} & {tr_acc:.4f} & {te_acc:.4f} & \\\\"
         )
         else:
             sign_tr = "$+$" if rel_tr_nll > 0 else "$-$"
             sign_te = "$+$" if rel_te_nll > 0 else "$-$"
+            sign_tr_acc = "$+$" if rel_tr_acc > 0 else "$-$"
+            sign_te_acc = "$+$" if rel_te_acc > 0 else "$-$"
             latex_lines.append(
-            f"{dataset_str} & {model_str} & {method} & {tr_nll:.4f}({sign_tr}{abs(rel_tr_ratio)*100:.2f}\%) & {te_nll:.4f}({sign_te}{abs(rel_te_ratio)*100:.2f}\%) & {tr_diff:.2f} & {te_diff:.2f} \\\\"
+            f"{dataset_str} & {model_str} & {method} & {tr_nll:.4f}({sign_tr}{abs(rel_tr_ratio)*100:.2f}\%) & {te_nll:.4f}({sign_te}{abs(rel_te_ratio)*100:.2f}\%) & {tr_acc:.4f}({sign_tr_acc}{abs(rel_tr_acc_ratio)*100:.2f}\%) & {te_acc:.4f}({sign_te_acc}{abs(rel_te_acc_ratio)*100:.2f}\%) & {tr_diff:.2f} & {te_diff:.2f} \\\\"
         )
         
         last_dataset = dataset
@@ -83,7 +94,7 @@ def format_latex_table(df):
 
     # Create the complete LaTeX table code
     column_format = "@{}lllcccc@{}"
-    header = "Dataset & Model Type & Method & Train_CE & Test_CE & Train_Diff & Test_Diff \\\\" + "\n" +"\\hline"
+    header = "Dataset & Model Type & Method & Train_CE & Test_CE & Train_Acc & Test_Acc & Train_Diff & Test_Diff \\\\" + "\n" +"\\hline"
     latex_table = "\\begin{tabular}{" + column_format + "}\n" + header + "\n"
     latex_table += "\n".join(latex_lines)
     latex_table += "\n\\hline\n\\end{tabular}"

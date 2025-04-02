@@ -53,32 +53,46 @@ def decision_value_to_prob(decision_values, prob_type, model_type, alpha=None, A
                 np.array([sigmoid_predict(float(x), A, B) for x in decision_values.squeeze(-1)]), axis=-1
             )
             return np.where(prob == 1, 1.0 - eps, prob)
+        if prob_type == "HFY":
+            eps = np.finfo(decision_values.dtype).eps
+            prob = np.exp(-loss_func(decision_values))
+            return np.where(prob == 1, 1.0 - eps, prob)
 
 
 def metrics_in_batches(model, batch_size, datasets, model_type, positive_label_idx, prob_type=None, alpha=None, A=None, B=None):
     num_instances = datasets["x"].shape[0]
     num_batches = math.ceil(num_instances / batch_size)
 
-    metrics = linear.get_metrics(["CrossEntropy"], datasets["y"].shape[1])
+    metrics_ce = linear.get_metrics(["CrossEntropy"], datasets["y"].shape[1])
+    metrics_acc = linear.get_metrics(["P@1"], datasets["y"].shape[1])
 
     res = 0
     for i in range(num_batches):
         tmp_data = datasets["x"][i * batch_size : (i + 1) * batch_size]
-        preds = model.predict_values(tmp_data)[:, positive_label_idx][:, np.newaxis]
-        target = datasets["y"][i * batch_size : (i + 1) * batch_size].toarray()[:, positive_label_idx][:, np.newaxis]
+        preds = model.predict_values(tmp_data)
+        preds_pos = preds[:, positive_label_idx][:, np.newaxis]
+        target = datasets["y"][i * batch_size : (i + 1) * batch_size].toarray()
+        target_pos = target[:, positive_label_idx][:, np.newaxis]
         probs = decision_value_to_prob(preds, prob_type, model_type, alpha, A, B)
-        res += check_prob(model_type, np.linalg.norm(model.weights), target, probs, preds)
-        metrics.update(probs, target)
-    metrics = metrics.compute()
-    return metrics["CrossEntropy"], res
+        probs_pos = probs[:, positive_label_idx][:, np.newaxis]
+        # DIFF
+        res += check_prob(model_type, np.linalg.norm(model.weights), target_pos, probs_pos, preds_pos)
+        # CrossEntropy
+        metrics_ce.update(probs_pos, target_pos)
+        # Acc
+        metrics_acc.update(probs, target)
+    metrics_ce = metrics_ce.compute()
+    metrics_acc = metrics_acc.compute()
+
+    return (metrics_ce["CrossEntropy"], metrics_acc["P@1"]), res
 
 
 data_names = ["a9a", "ijcnn1", "webspam", "real-sim", "rcv1", "rcv1_reverse"]
-prob_types = ["franc", "alpha_ce", "alpha_diff", "platt", "platt_onlyA", "liblinear"]
+prob_types = ["franc", "alpha_ce", "alpha_diff", "platt", "platt_onlyA", "liblinear", "HFY"]
 
 model_types = ["l2svm", "l1svm", "lr"]
 modes = ["trvate", "trva"]
-df_cols = "dataset,mode,model_type,tr_NLL,te_NLL,tr_diff,te_diff,alpha,A,B".split(",")
+df_cols = "dataset,mode,model_type,tr_NLL,te_NLL,tr_Acc,te_Acc,tr_diff,te_diff,alpha,A,B".split(",")
 import sys
 
 root = sys.argv[1]
@@ -121,7 +135,7 @@ for prob_type in pbar_dn:
                 B = None
                 selection = prob_type.split("_")[1] if prob_type.startswith("alpha_") else None
 
-                if model_type == "lr" or prob_type == "liblinear":
+                if model_type == "lr" or prob_type == "liblinear" or prob_type == "HFY":
                     lamda_tau = 2 / C * np.linalg.norm(model.weights)
 
                 if prob_type.startswith("alpha_"):
@@ -140,7 +154,7 @@ for prob_type in pbar_dn:
                         if selection != "ce":
                             metric = tmp_diff
                         else:
-                            metric = tmp_metrics
+                            metric = tmp_metrics[0]
                         if metric < _min:
                             _min = metric
                             best_alpha = tmp_alpha
@@ -174,10 +188,9 @@ for prob_type in pbar_dn:
                 te_metrics, te_res = metrics_in_batches(
                     model, 2**16, datasets["test"], model_type, positive_label_idx, prob_type=prob_type, alpha=alpha, A=A, B=B
                 )
-                tr_NLL = tr_metrics
-                te_NLL = te_metrics
-                tr_diff = abs(tr_res - lamda_tau)
-                te_diff = abs(te_res - lamda_tau)
+                tr_NLL, te_NLL = tr_metrics[0], te_metrics[0]
+                tr_Acc, te_Acc = tr_metrics[1], te_metrics[1]
+                tr_diff, te_diff = abs(tr_res - lamda_tau), abs(te_res - lamda_tau)
                 for col in df_cols:
                     df[col].append(eval(col) if col != "dataset" else eval("dn"))
 
