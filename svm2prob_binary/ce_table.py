@@ -46,8 +46,6 @@ def format_latex_table(df):
         dataset = row["dataset"]
         model_type = row["model_type"]
         method = row["method"] if model_type != "lr" else ""
-        if method == "Prob_lr":
-            method = "Alpha"
         tr_nll = row["tr_NLL"]
         te_nll = row["te_NLL"]
         tr_acc = row["tr_Acc"]
@@ -63,17 +61,17 @@ def format_latex_table(df):
         # Only show model type if it has changed within the dataset
         model_str = model_type if (dataset != last_dataset or model_type != last_model) else ""
         if model_str != "" and dataset_str == "":
-            latex_lines.append("\\cline{2-7}")
+            latex_lines.append("\\cline{2-9}")
         
         rel_tr_nll =  tr_nll - lr[cnt][0]
         rel_tr_ratio = rel_tr_nll / lr[cnt][0]
         rel_te_nll =  te_nll - lr[cnt][1]
         rel_te_ratio = rel_te_nll / lr[cnt][1]
 
-        rel_tr_acc =  tr_acc - lr[cnt][3]
-        rel_tr_acc_ratio = rel_tr_acc / lr[cnt][3]
-        rel_te_acc =  te_acc - lr[cnt][4]
-        rel_te_acc_ratio = rel_te_acc / lr[cnt][4]
+        rel_tr_acc =  tr_acc - lr[cnt][2]
+        rel_tr_acc_ratio = rel_tr_acc / lr[cnt][2]
+        rel_te_acc =  te_acc - lr[cnt][3]
+        rel_te_acc_ratio = rel_te_acc / lr[cnt][3]
 
         if model_type == "lr":
             cnt += 1
@@ -93,7 +91,7 @@ def format_latex_table(df):
         last_model = model_type
 
     # Create the complete LaTeX table code
-    column_format = "@{}lllcccc@{}"
+    column_format = "@{}lllcccccc@{}"
     header = "Dataset & Model Type & Method & Train_CE & Test_CE & Train_Acc & Test_Acc & Train_Diff & Test_Diff \\\\" + "\n" +"\\hline"
     latex_table = "\\begin{tabular}{" + column_format + "}\n" + header + "\n"
     latex_table += "\n".join(latex_lines)

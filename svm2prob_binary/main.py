@@ -69,17 +69,16 @@ def metrics_in_batches(model, batch_size, datasets, model_type, positive_label_i
     res = 0
     for i in range(num_batches):
         tmp_data = datasets["x"][i * batch_size : (i + 1) * batch_size]
-        preds = model.predict_values(tmp_data)
-        preds_pos = preds[:, positive_label_idx][:, np.newaxis]
-        target = datasets["y"][i * batch_size : (i + 1) * batch_size].toarray()
-        target_pos = target[:, positive_label_idx][:, np.newaxis]
+        preds = model.predict_values(tmp_data)[:, positive_label_idx][:, np.newaxis]
+        target = datasets["y"][i * batch_size : (i + 1) * batch_size].toarray()[:, positive_label_idx][:, np.newaxis]
         probs = decision_value_to_prob(preds, prob_type, model_type, alpha, A, B)
-        probs_pos = probs[:, positive_label_idx][:, np.newaxis]
         # DIFF
-        res += check_prob(model_type, np.linalg.norm(model.weights), target_pos, probs_pos, preds_pos)
+        res += check_prob(model_type, np.linalg.norm(model.weights), target, probs, preds)
         # CrossEntropy
-        metrics_ce.update(probs_pos, target_pos)
+        metrics_ce.update(probs, target)
         # Acc
+        probs = np.concatenate([1 - probs, probs], axis=1)
+        target = np.concatenate([1 - target, target], axis=1)
         metrics_acc.update(probs, target)
     metrics_ce = metrics_ce.compute()
     metrics_acc = metrics_acc.compute()
@@ -88,13 +87,12 @@ def metrics_in_batches(model, batch_size, datasets, model_type, positive_label_i
 
 
 data_names = ["a9a", "ijcnn1", "webspam", "real-sim", "rcv1", "rcv1_reverse"]
-prob_types = ["franc", "alpha_ce", "alpha_diff", "platt", "platt_onlyA", "liblinear", "HFY"]
-
+prob_types = ["HFY", "platt", "platt_onlyA", "franc", "alpha_ce", "alpha_diff", "liblinear"]
 model_types = ["l2svm", "l1svm", "lr"]
 modes = ["trvate", "trva"]
 df_cols = "dataset,mode,model_type,tr_NLL,te_NLL,tr_Acc,te_Acc,tr_diff,te_diff,alpha,A,B".split(",")
-import sys
 
+import sys
 root = sys.argv[1]
 
 pbar_dn = tqdm(prob_types)
