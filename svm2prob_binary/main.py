@@ -27,15 +27,15 @@ def l2_hinge_loss(x):
     return np.maximum(0, 1 - x) ** 2
 
 
-def decision_value_to_prob(decision_values, prob_type, model_type, alpha=None, A=None, B=None):
+def decision_value_to_prob(decision_values, prob_type, model_type, alpha=None, A=None, B=None, exp_alpha=1):
     # eps: a scalar close to zero, which is used to avoid numerical issues when calculating cross entropy
     eps = np.finfo(decision_values.dtype).eps
     model_type = model_type.lower()
 
     loss_func = l2_hinge_loss if model_type == "l2svm" else l1_hinge_loss
 
-    if model_type == "lr" or prob_type == "liblinear":
-        prob = expit(decision_values)
+    if model_type == "lr" or prob_type.startswith("liblinear"):
+        prob = expit(exp_alpha * decision_values)
         return np.where(prob == 1, 1.0 - eps, prob)
     else:
         if prob_type.startswith("alpha_") or prob_type == "franc":
@@ -59,7 +59,7 @@ def decision_value_to_prob(decision_values, prob_type, model_type, alpha=None, A
             return np.where(prob == 1, 1.0 - eps, prob)
 
 
-def metrics_in_batches(model, batch_size, datasets, model_type, positive_label_idx, prob_type=None, alpha=None, A=None, B=None):
+def metrics_in_batches(model, batch_size, datasets, model_type, positive_label_idx, prob_type=None, alpha=None, A=None, B=None, exp_alpha=1):
     num_instances = datasets["x"].shape[0]
     num_batches = math.ceil(num_instances / batch_size)
 
@@ -71,7 +71,7 @@ def metrics_in_batches(model, batch_size, datasets, model_type, positive_label_i
         tmp_data = datasets["x"][i * batch_size : (i + 1) * batch_size]
         preds = model.predict_values(tmp_data)[:, positive_label_idx][:, np.newaxis]
         target = datasets["y"][i * batch_size : (i + 1) * batch_size].toarray()[:, positive_label_idx][:, np.newaxis]
-        probs = decision_value_to_prob(preds, prob_type, model_type, alpha, A, B)
+        probs = decision_value_to_prob(preds, prob_type, model_type, alpha, A, B, exp_alpha)
         # DIFF
         res += check_prob(model_type, np.linalg.norm(model.weights), target, probs, preds)
         # CrossEntropy
@@ -87,7 +87,9 @@ def metrics_in_batches(model, batch_size, datasets, model_type, positive_label_i
 
 
 data_names = ["a9a", "ijcnn1", "webspam", "real-sim", "rcv1", "rcv1_reverse"]
-prob_types = ["HFY", "platt", "platt_onlyA", "franc", "alpha_ce", "alpha_diff", "liblinear"]
+# prob_types = ["HFY", "platt", "platt_onlyA", "franc", "alpha_ce", "alpha_diff", "liblinear", "liblinear_2"]
+prob_types = ["liblinear_2"]
+
 model_types = ["l2svm", "l1svm", "lr"]
 modes = ["trvate", "trva"]
 df_cols = "dataset,mode,model_type,tr_NLL,te_NLL,tr_Acc,te_Acc,tr_diff,te_diff,alpha,A,B".split(",")
@@ -132,8 +134,9 @@ for prob_type in pbar_dn:
                 A = None
                 B = None
                 selection = prob_type.split("_")[1] if prob_type.startswith("alpha_") else None
+                exp_alpha = int(prob_type.split("_")[1]) if prob_type.startswith("liblinear_") else None
 
-                if model_type == "lr" or prob_type == "liblinear" or prob_type == "HFY":
+                if model_type == "lr" or prob_type.startswith("liblinear") or prob_type == "HFY":
                     lamda_tau = 2 / C * np.linalg.norm(model.weights)
 
                 if prob_type.startswith("alpha_"):
@@ -181,10 +184,10 @@ for prob_type in pbar_dn:
                     alpha = 1
 
                 tr_metrics, tr_res = metrics_in_batches(
-                    model, 2**16, datasets["train"], model_type, positive_label_idx, prob_type=prob_type, alpha=alpha, A=A, B=B
+                    model, 2**16, datasets["train"], model_type, positive_label_idx, prob_type=prob_type, alpha=alpha, A=A, B=B, exp_alpha=exp_alpha
                 )
                 te_metrics, te_res = metrics_in_batches(
-                    model, 2**16, datasets["test"], model_type, positive_label_idx, prob_type=prob_type, alpha=alpha, A=A, B=B
+                    model, 2**16, datasets["test"], model_type, positive_label_idx, prob_type=prob_type, alpha=alpha, A=A, B=B, exp_alpha=exp_alpha
                 )
                 tr_NLL, te_NLL = tr_metrics[0], te_metrics[0]
                 tr_Acc, te_Acc = tr_metrics[1], te_metrics[1]
