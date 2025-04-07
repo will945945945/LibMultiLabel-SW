@@ -87,9 +87,8 @@ def metrics_in_batches(model, batch_size, datasets, model_type, positive_label_i
 
 
 data_names = ["a9a", "ijcnn1", "webspam", "real-sim", "rcv1", "rcv1_reverse"]
-# prob_types = ["HFY", "platt", "platt_onlyA", "franc", "alpha_ce", "alpha_diff", "liblinear", "liblinear_2"]
-prob_types = ["liblinear_2"]
-
+prob_types = ["HFY", "platt", "platt_onlyA", "franc", "alpha_ce", "alpha_diff", "liblinear", "liblinear_2"]
+# prob_types = ["liblinear_2"]
 model_types = ["l2svm", "l1svm", "lr"]
 modes = ["trvate", "trva"]
 df_cols = "dataset,mode,model_type,tr_NLL,te_NLL,tr_Acc,te_Acc,tr_diff,te_diff,alpha,A,B".split(",")
@@ -134,7 +133,7 @@ for prob_type in pbar_dn:
                 A = None
                 B = None
                 selection = prob_type.split("_")[1] if prob_type.startswith("alpha_") else None
-                exp_alpha = int(prob_type.split("_")[1]) if prob_type.startswith("liblinear_") else None
+                exp_alpha = int(prob_type.split("_")[1]) if prob_type.startswith("liblinear_") else 1
 
                 if model_type == "lr" or prob_type.startswith("liblinear") or prob_type == "HFY":
                     lamda_tau = 2 / C * np.linalg.norm(model.weights)

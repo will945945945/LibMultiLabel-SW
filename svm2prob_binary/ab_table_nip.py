@@ -52,12 +52,12 @@ def format_latex_table(df):
         onlyA = row.get("onlyA", "-")
 
         dataset_str = dataset if dataset != last_dataset else ""
-        if dataset_str != "":
-            latex_lines.append("\\hline")
+        # if dataset_str != "":
+        #     latex_lines.append("\\midrule")
 
         model_str = model_type if (dataset != last_dataset or model_type != last_model) else ""
         if model_str != "" and dataset_str == "":
-            latex_lines.append("\\cline{2-7}")
+            latex_lines.append("\\cmidrule{2-7}")
 
         latex_lines.append(f"{dataset_str} & {model_str} & {alpha_ce:.2f} & {alpha_diff:.2f} & {abs(onlyA):.2f} & {abs(A):.2f} & {B:.2f} \\\\")
 
@@ -66,10 +66,10 @@ def format_latex_table(df):
 
     # Create LaTeX table structure
     column_format = "llccccc"
-    header = "Dataset & Model Type & Alpha_CE & Alpha_Diff & $\\mid\\text{onlyA}\\mid$ & $\\mid\\text{A}\\mid$ & B \\\\"
+    header = "Dataset & Model Type & Alpha_CE & Alpha_Diff & $\\mid\\text{onlyA}\\mid$ & $\\mid\\text{A}\\mid$ & B \\\\" + "\n\\toprule"
     latex_table = "\\begin{tabular}{" + column_format + "}\n" + header + "\n"
     latex_table += "\n".join(latex_lines)
-    latex_table += "\n\\hline\n\\end{tabular}"
+    latex_table += "\n\\bottomrule\n\\end{tabular}"
     latex_table = latex_table.replace("_", "\_")
     return latex_table
 
