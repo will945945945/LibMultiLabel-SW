@@ -15,7 +15,7 @@ def load_and_process_csv(folder, method_name):
             df["method"] = method_name
             df = df[["dataset", "model_type", "method", "tr_NLL", "te_NLL", "tr_Acc", "te_Acc", "tr_diff", "te_diff"]]
             if method_name != "alpha_ce":
-                df = df[df["model_type"] != "lr"]
+                df = df[df["model_type"] != "LR"]
             data_list.append(df)
     
     return pd.concat(data_list, ignore_index=True) if data_list else pd.DataFrame()
@@ -37,7 +37,7 @@ def format_latex_table(df):
         te_nll = row["te_NLL"]
         tr_acc = row["tr_Acc"]
         te_acc = row["te_Acc"]
-        if model_type != "lr":
+        if model_type != "LR":
             continue
         lr.append([tr_nll, te_nll, tr_acc, te_acc])
 
@@ -45,7 +45,7 @@ def format_latex_table(df):
     for _, row in df.iterrows():
         dataset = row["dataset"]
         model_type = row["model_type"]
-        method = row["method"] if model_type != "lr" else ""
+        method = row["method"] if model_type != "LR" else ""
         tr_nll = row["tr_NLL"]
         te_nll = row["te_NLL"]
         tr_acc = row["tr_Acc"]
@@ -73,7 +73,7 @@ def format_latex_table(df):
         rel_te_acc =  te_acc - lr[cnt][3]
         rel_te_acc_ratio = rel_te_acc / lr[cnt][3]
 
-        if model_type == "lr":
+        if model_type == "LR":
             cnt += 1
             latex_lines.append(
             f"{dataset_str} & {model_str} & {method} & {tr_nll:.4f} & {te_nll:.4f} & {tr_acc:.4f} & {te_acc:.4f} & \\\\"
