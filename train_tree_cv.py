@@ -22,7 +22,9 @@ for i in range(5):
     datapath = ARGS.dataname+"_"+str(i+1)+".pkl"
     with open(datapath, "rb") as f:
         data_splits.append(pickle.load(f))
-for i in range(5):
+i_range = range(5)
+#i_range = [2]
+for i in i_range:
     data_y = sparse.vstack([data_splits[j]["train"]["y"] for j in range(5) if j != i])
     data_x = sparse.vstack([data_splits[j]["train"]["x"] for j in range(5) if j != i])
 
@@ -37,7 +39,7 @@ for i in range(5):
         with open(ARGS.treepath+"_"+str(i+1)+".pkl", "wb") as f:
             pickle.dump(treeroot, f)
     else:
-        with open(ARGS.treepath, "rb") as f:
+        with open(ARGS.treepath+"_"+str(i+1)+".pkl", "rb") as f:
             treeroot = pickle.load(f)   
 
     t = time.time()

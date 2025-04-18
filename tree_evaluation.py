@@ -66,12 +66,13 @@ for A in A_range:
     print(f"score of A = {A}: " + " ".join(msg))
 
 if ARGS.modeltype == "l2":
-    probtype = ["exp-L2"]
+    probtype = ["exp-L2", "sigmoid"]
 elif ARGS.modeltype == "l1":
-    probtype = ["exp-L1"]
+    probtype = ["exp-L1", "sigmoid"]
 elif ARGS.modeltype == "lr":
     probtype = ["sigmoid"]
 
+probtype = ["sigmoid"]
 #set best_A to run on test
 best_A = {}
 eval = {}
@@ -107,4 +108,8 @@ print("final scores:", eval)
 
 print("exp")
 eval = metrics[probtype[0]+str(1.)].compute()
+print("final scores:", eval)
+
+print("A1 sigmoid")
+eval = metrics["sigmoid"+str(1.)].compute()
 print("final scores:", eval)

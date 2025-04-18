@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 
 import numpy as np
 import scipy.sparse as sparse
@@ -101,39 +102,43 @@ def train_1vsrest(
     num_feature = x.shape[1]
     weights = np.zeros((num_feature, num_class), order="F")
 
-    node_c = []
-
     if verbose:
         logging.info(f"Training one-vs-rest model on {num_class} labels")
-    for i in tqdm(range(num_class), disable=not verbose):
-        yi = y[:, i].toarray().reshape(-1)
-        if "-v" in options:
-            options_split = options.split(" ")
-            ind = options_split.index("-v")
-            options_split = options_split[:ind] + options_split[ind + 2 :]
-            c_range = ["1", "10", "100", "0.1", "0.01"]
-            best = -1
-            best_c = "1"
-            for c in c_range:
-                tmp_option = options + " -c " + c
-                with silent_stderr():
-                    with silent_stdout():                        
-                        acc = train(2 * yi - 1, x, tmp_option)
-                if acc > best:
-                    best = acc
-                    best_c = c
-            # if best == 0:
-            #     import pickle
-            #     with open("acc/acc0_file_"+"_".join(options_split[0:2])+str(node.index)+"_"+str(num)+"_x.pkl", "wb") as F:
-            #         pickle.dump(x,F)
-            #     with open("acc/acc0_file_"+"_".join(options_split[0:2])+str(node.index)+"_"+str(num)+"_y.pkl", "wb") as F:
-            #         pickle.dump(2*yi-1,F)
-            best_option = " ".join(options_split) + " -c " + best_c
-            node_c.append(best_c)
-            weights[:, i] = _do_train(2 * yi - 1, x, best_option).ravel()
+    from .parallel import train_parallel_1vsrest
+    train_parallel_1vsrest(y, x, options, num_class, weights, verbose)
+    # node_c = []
 
-        else:
-            weights[:, i] = _do_train(2 * yi - 1, x, options).ravel()
+    # if verbose:
+    #     logging.info(f"Training one-vs-rest model on {num_class} labels")
+    # for i in tqdm(range(num_class), disable=not verbose):
+    #     yi = y[:, i].toarray().reshape(-1)
+    #     if "-v" in options:
+    #         options_split = options.split(" ")
+    #         ind = options_split.index("-v")
+    #         options_split = options_split[:ind] + options_split[ind + 2 :]
+    #         c_range = ["1", "10", "100", "0.1", "0.01"]
+    #         best = -1
+    #         best_c = "1"
+    #         for c in c_range:
+    #             tmp_option = options + " -c " + c
+    #             with silent_stderr():
+    #                 with silent_stdout():                        
+    #                     acc = train(2 * yi - 1, x, tmp_option)
+    #             if acc > best:
+    #                 best = acc
+    #                 best_c = c
+    #         # if best == 0:
+    #         #     import pickle
+    #         #     with open("acc/acc0_file_"+"_".join(options_split[0:2])+str(node.index)+"_"+str(num)+"_x.pkl", "wb") as F:
+    #         #         pickle.dump(x,F)
+    #         #     with open("acc/acc0_file_"+"_".join(options_split[0:2])+str(node.index)+"_"+str(num)+"_y.pkl", "wb") as F:
+    #         #         pickle.dump(2*yi-1,F)
+    #         best_option = " ".join(options_split) + " -c " + best_c
+    #         node_c.append(best_c)
+    #         weights[:, i] = _do_train(2 * yi - 1, x, best_option).ravel()
+
+    #     else:
+            # weights[:, i] = _do_train(2 * yi - 1, x, options).ravel()
 
     return FlatModel(
         name="1vsrest",
@@ -189,7 +194,8 @@ def _prepare_options(x: sparse.csr_matrix, options: str) -> tuple[sparse.csr_mat
         options_split.append(f"-m {int(os.cpu_count() / 2)}")
 
     options = " ".join(options_split)
-    return x, options, bias
+    # return x, options, bias
+    return x, re.sub(r"-m\s+\d+", "", options), bias
 
 
 def train_thresholding(
