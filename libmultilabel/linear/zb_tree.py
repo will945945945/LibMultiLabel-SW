@@ -6,12 +6,13 @@ import numpy as np
 import scipy.sparse as sparse
 import sklearn.cluster
 import sklearn.preprocessing
+from scipy.special import log_expit, xlogy, expit
 from tqdm import tqdm
 import psutil
 
 from . import linear
 
-__all__ = ["train_tree", "TreeModel"]
+__all__ = ["train_tree", "TreeModel", "get_tree_structure"]
 
 
 class Node:
@@ -55,10 +56,29 @@ class TreeModel:
         self.multiclass = False
         self._model_separated = False # Indicates whether the model has been separated for pruning tree.
 
-    def predict_values(
+    def predict_decision(
         self,
         x: sparse.csr_matrix,
         beam_width: int = 10,
+    ) -> np.ndarray:
+        # self.decision = linear.predict_values(self.flat_model, x)
+        if beam_width >= len(self.root.children):
+            # Beam_width is sufficiently large; pruning not applied.
+            # Calculates decision values for all nodes.
+            self.decision = linear.predict_values(self.flat_model, x) # number of instances * (number of labels + total number of metalabels)
+        else:
+            # Beam_width is small; pruning applied to reduce computation.
+            if not self._model_separated:
+                self._separate_model_for_pruning_tree()
+                self._model_separated = True
+            self.decision = self._prune_tree_and_predict_values(x, beam_width) # number of instances * (number of labels + total number of metalabels)
+        return
+
+    def predict_values(
+        self,
+        beam_width: int = 10,
+        prob_type: str="exp-L2",
+        A = 1,
     ) -> np.ndarray:
         """Calculates the probability estimates associated with x.
 
@@ -69,16 +89,6 @@ class TreeModel:
         Returns:
             np.ndarray: A matrix with dimension number of instances * number of classes.
         """
-        if beam_width >= len(self.root.children):
-            # Beam_width is sufficiently large; pruning not applied.
-            # Calculates decision values for all nodes.
-            all_preds = linear.predict_values(self.flat_model, x) # number of instances * (number of labels + total number of metalabels)
-        else:
-            # Beam_width is small; pruning applied to reduce computation.
-            if not self._model_separated:
-                self._separate_model_for_pruning_tree()
-                self._model_separated = True
-            all_preds = self._prune_tree_and_predict_values(x, beam_width) # number of instances * (number of labels + total number of metalabels)
         return np.vstack([self._beam_search(self.decision[i], beam_width, prob_type, A) for i in range(self.decision.shape[0])])
 
     def _separate_model_for_pruning_tree(self):
@@ -226,14 +236,24 @@ class TreeModel:
 
         return scores
 
+def get_tree_structure(
+    y: sparse.csr_matrix,
+    x: sparse.csr_matrix,
+    K=100,
+    dmax=10,
+) -> Node:
+    label_representation = (y.T * x).tocsr()
+    label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
+    root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
+    root.is_root = True
+    return root
 
 def train_tree(
     y: sparse.csr_matrix,
     x: sparse.csr_matrix,
     options: str = "",
-    K=100,
-    dmax=10,
     verbose: bool = True,
+    root: Node = None,
 ) -> TreeModel:
     """Trains a linear model for multi-label data using a divide-and-conquer strategy.
     The algorithm used is based on https://github.com/xmc-aalto/bonsai.
@@ -249,10 +269,7 @@ def train_tree(
     Returns:
         A model which can be used in predict_values.
     """
-    label_representation = (y.T * x).tocsr()
-    label_representation = sklearn.preprocessing.normalize(label_representation, norm="l2", axis=1)
-    root = _build_tree(label_representation, np.arange(y.shape[1]), 0, K, dmax)
-    root.is_root = True
+
 
     num_nodes = 0
     # Both type(x) and type(y) are sparse.csr_matrix
