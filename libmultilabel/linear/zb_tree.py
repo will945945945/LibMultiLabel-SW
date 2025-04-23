@@ -54,6 +54,7 @@ class TreeModel:
         self.flat_model = flat_model
         self.node_ptr = node_ptr
         self.multiclass = False
+        self.decision = None
         self._model_separated = False # Indicates whether the model has been separated for pruning tree.
 
     def predict_decision(
@@ -135,7 +136,7 @@ class TreeModel:
         """
         # Initialize space for all predictions with negative infinity
         num_instances, num_labels = x.shape[0], self.node_ptr[-1]
-        all_preds = np.full((num_instances, num_labels), np.NINF)
+        all_preds = np.full((num_instances, num_labels), -np.inf)
 
         # Calculate root decision values and scores
         root_preds = linear.predict_values(self.root_model, x)
@@ -145,7 +146,9 @@ class TreeModel:
         all_preds[slice] = root_preds
 
         # Select indices of the top beam_width subtrees for each instance
-        top_beam_width_indices = np.argsort(-children_scores, axis=1, kind="stable")[:, :beam_width]
+        # modified by KT, to avoid using prob estimation in L143
+        # we assume the order of preds and decision values are the same
+        top_beam_width_indices = np.argsort(-root_preds, axis=1, kind="stable")[:, :beam_width]
 
         # Build a mask where mask[i, j] is True if the j-th subtree is among the top beam_width subtrees for the i-th instance
         mask = np.zeros_like(children_scores, dtype=np.bool_)
@@ -215,7 +218,7 @@ class TreeModel:
         num_labels = len(self.root.label_map)
         scores = np.zeros(num_labels)
         for node, score in cur_level:
-            slice = np.s_[self.weight_map[node.index] : self.weight_map[node.index + 1]]
+            slice = np.s_[self.node_ptr[node.index] : self.node_ptr[node.index + 1]]
             pred = instance_preds[slice]
             if prob_type == "exp-L2":
                 scores[node.label_map] = np.exp(score - np.maximum(0, 1 - pred) ** 2)
@@ -269,7 +272,7 @@ def train_tree(
     Returns:
         A model which can be used in predict_values.
     """
-
+    print('this is zb_tree')
 
     num_nodes = 0
     # Both type(x) and type(y) are sparse.csr_matrix
