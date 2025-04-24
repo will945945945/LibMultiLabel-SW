@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-
+import numba
 import numpy as np
 import scipy as sp
 from sklearn.metrics import log_loss
@@ -10,14 +10,27 @@ from scipy.special import log_expit, xlogy
 __all__ = ["get_metrics", "compute_metrics", "tabulate_metrics", "MetricCollection"]
 
 
+# def _argsort_top_k(preds: np.ndarray, top_k: int) -> np.ndarray:
+#     """Sorts the top k indices in O(n + k log k) time.
+#     The sorting order is ascending to be consistent with np.sort.
+#     This means the last element is the largest, the first element is the kth largest.
+#     """
+#     top_k_idx = np.argpartition(preds, -top_k)[:, -top_k:]
+#     argsort_top_k = np.argsort(np.take_along_axis(preds, top_k_idx, axis=-1))
+#     return np.take_along_axis(top_k_idx, argsort_top_k, axis=-1)
+
+@numba.jit(nopython=True, parallel=True)
 def _argsort_top_k(preds: np.ndarray, top_k: int) -> np.ndarray:
-    """Sorts the top k indices in O(n + k log k) time.
-    The sorting order is ascending to be consistent with np.sort.
-    This means the last element is the largest, the first element is the kth largest.
-    """
-    top_k_idx = np.argpartition(preds, -top_k)[:, -top_k:]
-    argsort_top_k = np.argsort(np.take_along_axis(preds, top_k_idx, axis=-1))
-    return np.take_along_axis(top_k_idx, argsort_top_k, axis=-1)
+    batch_size = preds.shape[0]
+    result = np.zeros((batch_size, top_k), dtype=np.int64)
+
+    for i in range(batch_size):
+        row = preds[i]
+        top_indices = np.argpartition(row, -top_k)[-top_k:]
+        sorted_indices_of_indices = np.argsort(row[top_indices])
+        result[i] = top_indices[sorted_indices_of_indices]
+
+    return result
 
 
 def _dcg_argsort(argsort_preds: np.ndarray, target: np.ndarray, top_k: int) -> np.ndarray:
