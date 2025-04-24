@@ -1,7 +1,7 @@
 c=1
 K=100
-width=-1
-for num in 1235 1236 1237 1238 ; 
+width=10
+for num in 1234 #1235 1236 1237 1238 ; 
 do
 echo num ${num}
     for data in eurlex4k wiki31k amazoncat13k #amazon670k
