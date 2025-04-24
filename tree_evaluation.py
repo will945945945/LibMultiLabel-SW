@@ -21,7 +21,7 @@ ARGS = parser.parse_args()
 probtype_A = ["sigmoid"]
 A_range = [1., 1.5, 2., 2.5, 3., 3.5, 4., 4.5, 5., 6., 7., 8., 9., 16., 32, 64]
 
-metrics_for_eval = ["P@1", "P@3", "P@5", "CrossEntropy"]
+metrics_for_eval = ["P@1", "P@3", "P@5"]#, "CrossEntropy"]
 
 def metrics_in_batches(model, batch_size, metrics_for_eval, prob_alpha ): # prob_alpha = [(prob, alpha)]
     num_instances = data_x.shape[0]
@@ -59,7 +59,7 @@ for prob, A in prob_A:
     A_score[str(A)]["P@1"] += eval["P@1"]
     A_score[str(A)]["P@3"] += eval["P@3"]
     A_score[str(A)]["P@5"] += eval["P@5"]
-    A_score[str(A)]["CrossEntropy"] -= eval["CrossEntropy"]
+    # A_score[str(A)]["CrossEntropy"] -= eval["CrossEntropy"]
 
 for A in A_range:
     msg = [k + f": {100*v:.2f}" for k, v in  A_score[str(A)].items()]
@@ -101,10 +101,10 @@ for key in metrics_for_eval:
     print(key, " best A = ", bests[key],)
 print("final scores:", eval)
 
-key = "CrossEntropy"
-eval = metrics["sigmoid"+str(bests[key])].compute()
-print("CrossEntropy", " best A = ", best_A,)
-print("final scores:", eval)
+# key = "CrossEntropy"
+# eval = metrics["sigmoid"+str(bests[key])].compute()
+# print("CrossEntropy", " best A = ", best_A,)
+# print("final scores:", eval)
 
 print("exp")
 eval = metrics[probtype[0]+str(1.)].compute()
