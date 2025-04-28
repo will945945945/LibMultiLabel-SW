@@ -171,7 +171,7 @@ def train_tree(
     options: str = "",
     verbose: bool = True,
     root: Node = None,
-    scale_c: bool = True,
+    scale_c: bool = False,
 ) -> TreeModel:
     """Trains a linear model for multi-label data using a divide-and-conquer strategy.
     The algorithm used is based on https://github.com/xmc-aalto/bonsai.
