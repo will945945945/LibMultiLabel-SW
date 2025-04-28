@@ -191,7 +191,7 @@ def train_tree(
     if scale_c:
         num_instances = x.shape[0]
         print(f"original options: {options}", end=', ')
-        # We multiply the number of instances into C in the begining to avoid manual adjustment.
+        # We multiply the number of instances into C in the beginning to avoid manual adjustment.
         options = _normalize_c(options, 1/num_instances)
         print(f"current options: {options}")
 
