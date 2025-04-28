@@ -275,6 +275,13 @@ def train_tree(
     """
     print('this is zb_tree')
     print(f"Current scale_c setting: {scale_c}")
+        if scale_c:
+        num_instances = x.shape[0]
+        print(f"original options: {options}", end=', ')
+        # We multiply the number of instances into C in the begining to avoid manual adjustment.
+        options = _normalize_c(options, 1/num_instances)
+        print(f"current options: {options}")
+
     num_nodes = 0
     # Both type(x) and type(y) are sparse.csr_matrix
     # However, type((x != 0).T) becomes sparse.csc_matrix
@@ -390,6 +397,7 @@ def _train_node(y: sparse.csr_matrix, x: sparse.csr_matrix, options: str, node: 
         x (sparse.csr_matrix): A matrix with dimensions number of instances * number of features.
         options (str): The option string passed to liblinear.
         node (Node): Node to be trained.
+        scale_c (bool): Whether to scale the value of c by the number of instances.
     """
     if scale_c:
         num_instances = x.shape[0]

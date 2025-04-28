@@ -188,6 +188,13 @@ def train_tree(
         A model which can be used in predict_values.
     """
     print(f"Current scale_c setting: {scale_c}")
+    if scale_c:
+        num_instances = x.shape[0]
+        print(f"original options: {options}", end=', ')
+        # We multiply the number of instances into C in the begining to avoid manual adjustment.
+        options = _normalize_c(options, 1/num_instances)
+        print(f"current options: {options}")
+
     num_nodes = 0
     # Both type(x) and type(y) are sparse.csr_matrix
     # However, type((x != 0).T) becomes sparse.csc_matrix
