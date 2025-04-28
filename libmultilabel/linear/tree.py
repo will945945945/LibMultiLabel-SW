@@ -171,6 +171,7 @@ def train_tree(
     options: str = "",
     verbose: bool = True,
     root: Node = None,
+    scale_c: bool = True,
 ) -> TreeModel:
     """Trains a linear model for multi-label data using a divide-and-conquer strategy.
     The algorithm used is based on https://github.com/xmc-aalto/bonsai.
@@ -186,7 +187,7 @@ def train_tree(
     Returns:
         A model which can be used in predict_values.
     """
-
+    print(f"Current scale_c setting: {scale_c}")
     num_nodes = 0
     # Both type(x) and type(y) are sparse.csr_matrix
     # However, type((x != 0).T) becomes sparse.csc_matrix
@@ -214,10 +215,10 @@ def train_tree(
 
     def visit(node):
         if node.is_root:
-            _train_node(y, x, options, node)
+            _train_node(y, x, options, node, scale_c)
         else:
             relevant_instances = y[:, node.label_map].getnnz(axis=1) > 0
-            _train_node(y[relevant_instances], x[relevant_instances], options, node)
+            _train_node(y[relevant_instances], x[relevant_instances], options, node, scale_c)
         pbar.update()
 
     root.dfs(visit)
@@ -283,8 +284,17 @@ def get_estimated_model_size(root):
     # Our study showed that among the used features of every binary classification problem, on average no more than 2/3 of weights obtained by the dual coordinate descent method are non-zeros.
     return total_num_weights * 16 * 2 / 3
 
+def _normalize_c(cmd, scaler):
+    args = cmd.split()
+    for i in range(len(args) - 1):
+        if args[i] == '-c':
+            current_c = float(args[i + 1])
+            scaled_c = current_c / scaler
+            args[i + 1] = str(scaled_c)
+            break
+    return ' '.join(args)
 
-def _train_node(y: sparse.csr_matrix, x: sparse.csr_matrix, options: str, node: Node):
+def _train_node(y: sparse.csr_matrix, x: sparse.csr_matrix, options: str, node: Node, scale_c: bool):
     """If node is internal, computes the metalabels representing each child and trains
     on the metalabels. Otherwise, train on y.
 
@@ -293,7 +303,12 @@ def _train_node(y: sparse.csr_matrix, x: sparse.csr_matrix, options: str, node: 
         x (sparse.csr_matrix): A matrix with dimensions number of instances * number of features.
         options (str): The option string passed to liblinear.
         node (Node): Node to be trained.
+        scale_c (bool): Whether to scale the value of c by the number of instances.
     """
+    if scale_c:
+        num_instances = x.shape[0]
+        options = _normalize_c(options, num_instances)
+
     if node.isLeaf():
         node.model = linear.train_1vsrest(y[:, node.label_map], x, False, options, False)
     else:
