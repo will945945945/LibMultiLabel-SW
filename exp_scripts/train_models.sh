@@ -12,33 +12,36 @@ train_cmd="${train_cmd} --linear_technique 1vsrest"
 train_cmd="${train_cmd} --data_format svm"
 train_cmd="${train_cmd} --monitor_metrics P@1"
 
-for mode in trva trvate
+for C in 0.0001220703125 0.000244140625 0.00048828125 0.0009765625 0.001953125 0.00390625 0.0078125 0.015625 0.03125 0.0625 0.125 0.25 0.5 1 2 4 8 16 32 64 128 256 512 1024
 do
-    for dset in a9a real-sim rcv1 ijcnn1 webspam
+    for mode in trva trvate
     do
-        for mname in l1svm l2svm lr
+        for dset in a9a real-sim rcv1 ijcnn1 webspam
         do
-            data_path="$data_root/dataset_$dset"
-            cmd="${train_cmd} --data_name $dset"
-            cmd="${cmd} --result_dir $log_root/${mode}/"
-            cmd="${cmd} --training_file $data_path/${mode}.svm"
-            cmd="${cmd} --test_file $data_path/te.svm"
-            if [ "$mname" == "l1svm" ]; then
-                # L2-regularized L1-loss support vector classification (dual)
-                s=3
-                c=1
-            elif [ "$mname" == "l2svm" ]; then
-                # L2-regularized L2-loss support vector classification (dual)
-                s=1
-                c=1
-            else
-                # L2-regularized logistic regression (dual)
-                s=0
-                c=10
-            fi
-            cmd="${cmd} --liblinear_options='-s $s -c $c'"
-            cmd="${cmd} --model_name ${mname}_c${c}"
-            echo "${cmd}"
+            for mname in l1svm l2svm lr
+            do
+                data_path="$data_root/dataset_$dset"
+                cmd="${train_cmd} --data_name $dset"
+                cmd="${cmd} --result_dir $log_root/${mode}/"
+                cmd="${cmd} --training_file $data_path/${mode}.svm"
+                cmd="${cmd} --test_file $data_path/te.svm"
+                if [ "$mname" == "l1svm" ]; then
+                    # L2-regularized L1-loss support vector classification (dual)
+                    s=3
+                    c=$C
+                elif [ "$mname" == "l2svm" ]; then
+                    # L2-regularized L2-loss support vector classification (dual)
+                    s=1
+                    c=$C
+                else
+                    # L2-regularized logistic regression (dual)
+                    s=0
+                    c=$C
+                fi
+                cmd="${cmd} --liblinear_options='-s $s -c $c'"
+                cmd="${cmd} --model_name ${mname}_c${c}"
+                echo "${cmd}"
+            done
         done
     done
 done

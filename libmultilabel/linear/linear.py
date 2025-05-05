@@ -597,7 +597,7 @@ def train_binary_and_multiclass(
 
     prob = problem(y, x)
     param = parameter(options)
-    param.w_recalc = True
+    param.w_recalc = True if param.solver_type != 0 else False
     with silent_stderr():
         model = train(prob, param)
 

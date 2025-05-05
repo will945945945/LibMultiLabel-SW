@@ -1,20 +1,19 @@
 import sys
 import os
-import json
 
 parent_dir = os.path.abspath("..")
 sys.path.append(parent_dir)
 
-import pickle
+from liblinear.liblinearutil import train, predict
 import libmultilabel.linear as linear
 import numpy as np
-import math
 import pandas as pd
+from sklearn.model_selection import KFold
 
 from tqdm import tqdm
 from libmultilabel.common_utils import AttributeDict
 from scipy.special import expit
-from util import sigmoid_train_A, sigmoid_predict_A, sigmoid_train, sigmoid_predict, check_prob
+from util import sigmoid_train_A, sigmoid_predict_A, sigmoid_train, sigmoid_predict, check_prob, gen_S
 
 
 def l1_hinge_loss(x):
@@ -27,176 +26,148 @@ def l2_hinge_loss(x):
     return np.maximum(0, 1 - x) ** 2
 
 
-def decision_value_to_prob(decision_values, prob_type, model_type, alpha=None, A=None, B=None, exp_alpha=1):
+def decision_value_to_prob(decision_values, prob_type, model_type, alpha=None, A=None, B=None):
     # eps: a scalar close to zero, which is used to avoid numerical issues when calculating cross entropy
     eps = np.finfo(decision_values.dtype).eps
     model_type = model_type.lower()
 
     loss_func = l2_hinge_loss if model_type == "l2svm" else l1_hinge_loss
 
-    if model_type == "lr" or prob_type.startswith("liblinear"):
-        prob = expit(exp_alpha * decision_values)
+    if model_type == "lr":
+        prob = expit(decision_values)
         return np.where(prob == 1, 1.0 - eps, prob)
     else:
-        if prob_type.startswith("alpha_") or prob_type == "franc":
+        if prob_type == "alpha" or prob_type == "franc":
             prob = expit(0.5 * alpha * (loss_func(-decision_values) - loss_func(decision_values)))
-            return np.where(prob == 1, 1.0 - eps, prob)
-        if prob_type == "platt_onlyA":
-            eps = np.finfo(decision_values.dtype).eps
-            prob = np.expand_dims(
-                np.array([sigmoid_predict_A(float(x), A) for x in decision_values.squeeze(-1)]), axis=-1
-            )
             return np.where(prob == 1, 1.0 - eps, prob)
         if prob_type == "platt":
             eps = np.finfo(decision_values.dtype).eps
             prob = np.expand_dims(
-                np.array([sigmoid_predict(float(x), A, B) for x in decision_values.squeeze(-1)]), axis=-1
+                np.array([sigmoid_predict(float(x), A, B) for x in decision_values]), axis=-1
             )
             return np.where(prob == 1, 1.0 - eps, prob)
-        if prob_type == "HFY":
-            eps = np.finfo(decision_values.dtype).eps
-            prob = np.exp(-loss_func(decision_values))
-            return np.where(prob == 1, 1.0 - eps, prob)
 
 
-def metrics_in_batches(model, batch_size, datasets, model_type, positive_label_idx, prob_type=None, alpha=None, A=None, B=None, exp_alpha=1):
-    num_instances = datasets["x"].shape[0]
-    num_batches = math.ceil(num_instances / batch_size)
+def cal_metrics(preds, target, model_type, prob_type=None, alpha=None, A=None, B=None):
+    metrics_ce = linear.get_metrics(["CrossEntropy"], 2)
+    # metrics_acc = linear.get_metrics(["P@1"], 2)
+    
+    probs = decision_value_to_prob(preds, prob_type, model_type, alpha, A, B)
+    # CrossEntropy
+    metrics_ce.update(probs, target)
+    # Acc
+    # probs = np.concatenate([1 - probs, probs], axis=1)
+    # target = np.concatenate([1 - target, target], axis=1)
+    # metrics_acc.update(probs, target)
 
-    metrics_ce = linear.get_metrics(["CrossEntropy"], datasets["y"].shape[1])
-    metrics_acc = linear.get_metrics(["P@1"], datasets["y"].shape[1])
-
-    res = 0
-    for i in range(num_batches):
-        tmp_data = datasets["x"][i * batch_size : (i + 1) * batch_size]
-        preds = model.predict_values(tmp_data)[:, positive_label_idx][:, np.newaxis]
-        target = datasets["y"][i * batch_size : (i + 1) * batch_size].toarray()[:, positive_label_idx][:, np.newaxis]
-        probs = decision_value_to_prob(preds, prob_type, model_type, alpha, A, B, exp_alpha)
-        # DIFF
-        res += check_prob(model_type, np.linalg.norm(model.weights), target, probs, preds)
-        # CrossEntropy
-        metrics_ce.update(probs, target)
-        # Acc
-        probs = np.concatenate([1 - probs, probs], axis=1)
-        target = np.concatenate([1 - target, target], axis=1)
-        metrics_acc.update(probs, target)
     metrics_ce = metrics_ce.compute()
-    metrics_acc = metrics_acc.compute()
+    # metrics_acc = metrics_acc.compute()
 
-    return (metrics_ce["CrossEntropy"], metrics_acc["P@1"]), res
+    return metrics_ce["CrossEntropy"]
 
+def find_alpha_A_B(model_type, prob_type, train_data, test_data, param, positive_label_idx):
+    X_train, y_train = train_data
+    X_test, y_test = test_data
+    alpha, A, B = None, None, None
+    # Train the model
+    model = linear.train_binary_and_multiclass(y_train, X_train, False, param)
+    # Test Data
+    decision_value_test = model.predict_values(X_test)[:, positive_label_idx][:, np.newaxis]
+    target_test = y_test.toarray()[:, positive_label_idx][:, np.newaxis]
 
-data_names = ["a9a", "ijcnn1", "webspam", "real-sim", "rcv1", "rcv1_reverse"]
-prob_types = ["HFY", "platt", "platt_onlyA", "franc", "alpha_ce", "alpha_diff", "liblinear", "liblinear_2"]
-# prob_types = ["liblinear_2"]
-model_types = ["l2svm", "l1svm", "lr"]
-modes = ["trvate", "trva"]
-df_cols = "dataset,mode,model_type,tr_NLL,te_NLL,tr_Acc,te_Acc,tr_diff,te_diff,alpha,A,B".split(",")
+    if model_type != "lr":
+        # Train Data (S)
+        decision_value_train = gen_S(X_train, y_train, positive_label_idx, param)[:, np.newaxis]
+        target_train = y_train.toarray()[:, positive_label_idx][:, np.newaxis]
+
+        if prob_type == "alpha":
+            # Grid search Alpha value
+            _min = float("inf")
+            best_alpha = 0
+            # Use Whole Training Set
+            # ======================
+            for tmp_alpha in np.arange(1, 10.1, 0.1):
+                metric = cal_metrics(decision_value_train, target_train, model_type, prob_type=prob_type, alpha=tmp_alpha
+                )
+                if metric < _min:
+                    _min = metric
+                    best_alpha = tmp_alpha
+
+            alpha = best_alpha
+
+        if prob_type == "platt":
+            # Train Platt model.
+            A, B = sigmoid_train(decision_value_train, target_train)
+
+        if prob_type == "franc":
+            alpha = 1
+    
+    ce = cal_metrics(
+        decision_value_test, target_test, model_type, prob_type=prob_type, alpha=alpha, A=A, B=B
+    )
+    return ce, (alpha, A, B)
+data_names = ["a9a", "ijcnn1", "webspam", "real-sim", "rcv1"]
+prob_types = ["platt", "franc", "alpha"]
+model_types = ["lr", "l2svm", "l1svm", ]
+df_cols = "dataset,model_type,te_NLL,alpha,A,B,best_C".split(",")
 
 import sys
-root = sys.argv[1]
+search = sys.argv[1]
+if search == 'tuned':
+    space = [i for i in range(-13, 11)]
+else:
+    space = [1]
 
-pbar_dn = tqdm(prob_types)
-for prob_type in pbar_dn:
-    pbar_dn.set_description(f"Dataset: {prob_type}")
+model2s = {
+    "l2svm":1,
+    "l1svm":3,
+    "lr":0
+}
+
+for prob_type in prob_types:
     for dn in data_names:
         df = {_c: [] for _c in df_cols}
         for model_type in model_types:
-            for mode in modes:
-                # Load linear model
-                logs_dir = f"{root}/{mode}"
-                model_path_prefix = f"{dn}_{model_type}_c"
-                model_path = sorted(
-                    [os.path.join(logs_dir, _d) for _d in os.listdir(logs_dir) if _d.startswith(model_path_prefix)]
-                )[-1]
-                ARGS = {
-                    "traindata_path": f"../datasets/binary_datasets/dataset_{dn}/{mode}.svm",
+            _min_ce = float('inf')
+            best_C = 0
+            ARGS = {
+                    "traindata_path": f"../datasets/binary_datasets/dataset_{dn}/trva.svm",
                     "testdata_path": f"../datasets/binary_datasets/dataset_{dn}/te.svm",
-                    "modelpath": f"{model_path}/linear_pipeline.pickle",
-                    "log": f"{model_path}/logs.json",
                 }
-                ARGS = AttributeDict(ARGS)
+            ARGS = AttributeDict(ARGS)
+            # Load Data
+            datasets = linear.load_dataset("svm", ARGS.traindata_path, ARGS.testdata_path)
+            preprocessor = linear.Preprocessor(False, False)
+            datasets = preprocessor.fit_transform(datasets)
+            positive_label_idx = np.where(preprocessor.label_mapping == 1)[0][0]
+            X, y = datasets["train"]["x"], datasets["train"]["y"]
+            X_test, y_test = datasets["test"]["x"], datasets["test"]["y"]
+            pbar_dn = tqdm(space)
+            pbar_dn.set_description(f"Dataset: {dn}, Prob: {prob_type}, Model: {model_type}")
+            for i in pbar_dn:
+                C = 2 ** i 
+                param = f"-s {model2s[model_type]} -c {C}"                
+                cur_ce = 0
+                kf = KFold(n_splits=5, shuffle=False)
+                for train_idx, test_idx in kf.split(X):
+                    train_data = (X[train_idx], y[train_idx])
+                    test_data = (X[test_idx], y[test_idx])
+                    
+                    cur_ce += find_alpha_A_B(model_type, prob_type, train_data, test_data, param, positive_label_idx)[0]
+                cur_ce /= 5
+                if cur_ce < _min_ce:
+                    _min_ce = cur_ce
+                    best_C = C
 
-                datasets = linear.load_dataset("svm", ARGS.traindata_path, ARGS.testdata_path)
-                preprocessor = linear.Preprocessor(False, False)
-                datasets = preprocessor.fit_transform(datasets)
-                positive_label_idx = np.where(preprocessor.label_mapping == 1)[0][0]
+            param = f"-s {model2s[model_type]} -c {best_C}" 
+            te_NLL, (alpha, A, B) = find_alpha_A_B(model_type, prob_type, (X, y), (X_test, y_test), param, positive_label_idx)
 
-                with open(ARGS.modelpath, "rb") as F:
-                    model = pickle.load(F)["model"]
-
-                with open(ARGS.log, "rb") as F:
-                    C = float(json.load(F)["config"]["liblinear_options"].split(" ")[-1])
-
-                lamda_tau = None
-                alpha = None
-                A = None
-                B = None
-                selection = prob_type.split("_")[1] if prob_type.startswith("alpha_") else None
-                exp_alpha = int(prob_type.split("_")[1]) if prob_type.startswith("liblinear_") else 1
-
-                if model_type == "lr" or prob_type.startswith("liblinear") or prob_type == "HFY":
-                    lamda_tau = 2 / C * np.linalg.norm(model.weights)
-
-                if prob_type.startswith("alpha_"):
-                    # Grid search Alpha value
-                    _min = float("inf")
-                    best_tr = 0
-                    best_alpha = 0
-                    # Use Whole Training Set
-                    # ======================
-                    for tmp_alpha in np.arange(1, 10.1, 0.1):
-                        tmp_metrics, tmp_res = metrics_in_batches(
-                            model, 2**16, datasets["train"], model_type, positive_label_idx, prob_type=prob_type, alpha=tmp_alpha
-                        )
-                        lamda_tau = 2 / C * np.linalg.norm(model.weights) / tmp_alpha
-                        tmp_diff = abs(tmp_res - lamda_tau)
-                        if selection != "ce":
-                            metric = tmp_diff
-                        else:
-                            metric = tmp_metrics[0]
-                        if metric < _min:
-                            _min = metric
-                            best_alpha = tmp_alpha
-
-                    lamda_tau = 2 / C * np.linalg.norm(model.weights) / best_alpha
-                    alpha = best_alpha
-
-                if prob_type == "platt":
-                    # Train Platt model.
-                    preds = model.predict_values(datasets["train"]["x"])[:, positive_label_idx][:, np.newaxis]
-                    target = datasets["train"]["y"].toarray()[:, positive_label_idx][:, np.newaxis]
-
-                    lamda_tau = 2 / C * np.linalg.norm(model.weights)
-                    A, B = sigmoid_train(preds, target)
-
-                if prob_type == "platt_onlyA":
-                    # Train Platt model (No B).
-                    preds = model.predict_values(datasets["train"]["x"])[:, positive_label_idx][:, np.newaxis]
-                    target = datasets["train"]["y"].toarray()[:, positive_label_idx][:, np.newaxis]
-
-                    lamda_tau = 2 / C * np.linalg.norm(model.weights)
-                    A = sigmoid_train_A(preds, target)
-
-                if prob_type == "franc":
-                    lamda_tau = 2 / C * np.linalg.norm(model.weights)
-                    alpha = 1
-
-                tr_metrics, tr_res = metrics_in_batches(
-                    model, 2**16, datasets["train"], model_type, positive_label_idx, prob_type=prob_type, alpha=alpha, A=A, B=B, exp_alpha=exp_alpha
-                )
-                te_metrics, te_res = metrics_in_batches(
-                    model, 2**16, datasets["test"], model_type, positive_label_idx, prob_type=prob_type, alpha=alpha, A=A, B=B, exp_alpha=exp_alpha
-                )
-                tr_NLL, te_NLL = tr_metrics[0], te_metrics[0]
-                tr_Acc, te_Acc = tr_metrics[1], te_metrics[1]
-                tr_diff, te_diff = abs(tr_res - lamda_tau), abs(te_res - lamda_tau)
-                for col in df_cols:
-                    df[col].append(eval(col) if col != "dataset" else eval("dn"))
+            for col in df_cols:
+                df[col].append(eval(col) if col != "dataset" else eval("dn"))
 
         df = pd.DataFrame(df)
 
-        if root == "../models/runs_tuned":
+        if search == "tuned":
             os.makedirs(f"tables/tune/{prob_type}", exist_ok=True)
             df.to_csv(f"tables/tune/{prob_type}/{dn}.csv", index=False)
         else:

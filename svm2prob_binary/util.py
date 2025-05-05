@@ -1,18 +1,10 @@
 import numpy as np
 from ctypes import *
-from ctypes.util import find_library
-from os import path
-from glob import glob
-import sys
+import numpy as np
+import libmultilabel.linear as linear
+from sklearn.model_selection import KFold
 
-try:
-    import numpy as np
-    import scipy
-    from scipy import sparse
-except:
-    scipy = None
-
-libsvm = CDLL('../libsvm/libsvm.so')
+libsvm = CDLL('./libsvm.so')
 
 # Define function signature
 libsvm.sigmoid_train.argtypes = [
@@ -90,3 +82,22 @@ def diff_term(model_type, norm, decision_values):
 
 def check_prob(model_type, norm, target, pos_probs, preds):
     return (-diff_term(model_type, norm, target * preds) + pos_probs * diff_term(model_type, norm, preds) + (1 - pos_probs) * diff_term(model_type, norm, -preds)).sum(0).squeeze()
+
+
+def gen_S(X, y, positive_label_idx, param):
+    n_samples = y.shape[0]
+    decision_values = np.zeros(n_samples)
+
+    kf = KFold(n_splits=5, shuffle=False)
+    for train_idx, test_idx in kf.split(X):
+        X_train = X[train_idx]
+        y_train = y[train_idx]
+        X_test = X[test_idx]
+
+        model = linear.train_binary_and_multiclass(y_train, X_train, False, param)
+        
+        dec_vals = model.predict_values(X_test)[:, positive_label_idx][:, np.newaxis]
+
+        for i, idx in enumerate(test_idx):
+            decision_values[idx] = dec_vals[i][0]
+    return decision_values
