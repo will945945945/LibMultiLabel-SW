@@ -4,16 +4,15 @@ import os
 parent_dir = os.path.abspath("..")
 sys.path.append(parent_dir)
 
-from liblinear.liblinearutil import train, predict
 import libmultilabel.linear as linear
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import KFold
+from sklearn.model_selection import KFold, StratifiedKFold
 
 from tqdm import tqdm
 from libmultilabel.common_utils import AttributeDict
 from scipy.special import expit
-from util import sigmoid_train_A, sigmoid_predict_A, sigmoid_train, sigmoid_predict, check_prob, gen_S
+from util import sigmoid_train, sigmoid_predict, gen_S
 
 
 def l1_hinge_loss(x):
@@ -106,7 +105,8 @@ def find_alpha_A_B(model_type, prob_type, train_data, test_data, param, positive
         decision_value_test, target_test, model_type, prob_type=prob_type, alpha=alpha, A=A, B=B
     )
     return ce, (alpha, A, B)
-data_names = ["a9a", "ijcnn1", "webspam", "real-sim", "rcv1"]
+data_names = ["real-sim" ]
+# ,"rcv1", "a9a", "ijcnn1", "webspam",
 prob_types = ["platt", "franc", "alpha"]
 model_types = ["lr", "l2svm", "l1svm", ]
 df_cols = "dataset,model_type,te_NLL,alpha,A,B,best_C".split(",")
@@ -148,7 +148,7 @@ for prob_type in prob_types:
                 C = 2 ** i 
                 param = f"-s {model2s[model_type]} -c {C}"                
                 cur_ce = 0
-                kf = KFold(n_splits=5, shuffle=False)
+                kf = StratifiedKFold(n_splits=5, shuffle=False)
                 for train_idx, test_idx in kf.split(X):
                     train_data = (X[train_idx], y[train_idx])
                     test_data = (X[test_idx], y[test_idx])
