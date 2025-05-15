@@ -2,7 +2,7 @@ import numpy as np
 from ctypes import *
 import numpy as np
 import libmultilabel.linear as linear
-from sklearn.model_selection import KFold, StratifiedKFold
+from sklearn.model_selection import StratifiedKFold
 
 libsvm = CDLL('./libsvm.so')
 
@@ -89,11 +89,11 @@ def gen_S(X, y, positive_label_idx, param):
     decision_values = np.zeros(n_samples)
 
     kf = StratifiedKFold(n_splits=5, shuffle=False)
-    for train_idx, test_idx in kf.split(X):
+    for train_idx, test_idx in kf.split(X.toarray(), y.toarray()[:, positive_label_idx]):
         X_train = X[train_idx]
         y_train = y[train_idx]
         X_test = X[test_idx]
-        print(y[train_idx].toarray())
+
         for idx, (i, j) in enumerate(y[train_idx].toarray()):
             if i == j == 0:
                 print(idx)

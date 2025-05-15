@@ -13,8 +13,8 @@ def load_and_process_csv(folder, method_name):
             df = pd.read_csv(os.path.join(folder, file))
             df = df[df["mode"] == "trva"]
             df["method"] = method_name if method_name != "alpha_ce" else "Ours"
-            df = df[["dataset", "model_type", "method", "tr_NLL", "te_NLL", "tr_Acc", "te_Acc", "tr_diff", "te_diff"]]
-            if method_name != "alpha_ce":
+            df = df[["dataset", "model_type", "method", "te_NLL"]]
+            if method_name != "alpha":
                 df = df[df["model_type"] != "LR"]
             data_list.append(df)
     
