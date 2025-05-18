@@ -14,7 +14,6 @@ parser.add_argument("--treepath", type=str, default="")
 parser.add_argument("--buildtree", type=bool, default=False)
 parser.add_argument("--K", type=int, default=10)
 parser.add_argument("--seed", type=int, default=1234)
-parser.add_argument("--scale_c", type=bool, default=False) )
 ARGS = parser.parse_args()
 
 np.random.seed(ARGS.seed)

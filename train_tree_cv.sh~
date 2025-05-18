@@ -14,29 +14,26 @@ do
             --treepath "treestructures/tree_structure_K${K}_${data}_${seed}_5folds"\
             --K ${K} \
             --seed ${seed} \
-	    --scale_c 1 \
             #--buildtree 1
             
         echo ${data} l2 c ${C}
         python3 train_tree_cv.py \
             --dataname datasets/${data}_5folds \
-            --modelname models/tree_K${K}_${data}_${seed}_l2_c${C}_L_5folds\
+            --modelname models/tree_K${K}_${data}_${seed}_l2_c${C}_5folds\
             --liblinear_options "-s 1 -c ${C} -m 4 -B 1 -q"\
             --treepath "treestructures/tree_structure_K${K}_${data}_${seed}_5folds"\
             --K ${K} \
             --seed ${seed} \
-	    --scale_c 1 \
         #    --buildtree 1
 
         # echo ${data} lr c ${C}
         # python3 train_tree_cv.py \
         #     --dataname datasets/${data}_5folds \
-        #     --modelname models/tree_K${K}_${data}_${seed}_lr_c${C}_L_5folds\
+        #     --modelname models/tree_K${K}_${data}_${seed}_lr_c${C}_5folds\
         #     --liblinear_options "-s 0 -c ${C} -B 1 -q"\
         #     --treepath "treestructures/tree_structure_K${K}_${data}_${seed}_5folds"\
         #     --K ${K} \
         #     --seed ${seed} \
-	#     --scale_c 1 \
         #     #--buildtree 1
         done
     done
