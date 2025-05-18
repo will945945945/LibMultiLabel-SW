@@ -55,18 +55,23 @@ for i in range(5):
         data_splits.append(pickle.load(f))
 
 # Cross Validation
-# prob_A = [(prob, A) for prob in probtype_A for A in A_range]
+prob_A = [(prob, A) for prob in probtype_A for A in A_range]
+
 if ARGS.modeltype == "l2":
-    # prob_A.append(("exp-L2", 1)) 
-    prob_A = [("exp-L2", 1)]
+    prob_A.append(("exp-L2", 1)) 
+    # prob_A = [("exp-L2", 1)]
     probtype = ["exp-L2"]
 elif ARGS.modeltype == "l1":
-    # prob_A.append(("exp-L1", 1)) 
-    prob_A = [("exp-L1", 1)]
+    prob_A.append(("exp-L1", 1)) 
+    # prob_A = [("exp-L1", 1)]
     probtype = ["exp-L1"]
-# A_score = {str(A):{k:0. for k in metrics_for_eval} for A in A_range} 
-# A_score['exp'] = {k:0. for k in metrics_for_eval}
-A_score = {'exp': {k:0. for k in metrics_for_eval}}
+elif ARGS.modeltype == "lr":
+    prob_A.append(("sigmoid", 1)) 
+    # prob_A = [("exp-L1", 1)]
+    probtype = ["sigmoid"]
+A_score = {str(A):{k:0. for k in metrics_for_eval} for A in A_range} 
+A_score['exp'] = {k:0. for k in metrics_for_eval}
+# A_score = {'exp': {k:0. for k in metrics_for_eval}}
 for i in range(5):
     modelpath = ARGS.modelname+"_5folds_"+str(i+1)+".pkl"
     with open(modelpath, "rb") as F:
@@ -76,19 +81,19 @@ for i in range(5):
     data_x = data_splits[i]["train"]["x"]
     metrics = metrics_in_batches(model, 1000, metrics_for_eval, prob_A)
 
-    # for prob, A in prob_A:
-    #     eval = metrics[prob+str(A)].compute()
-    #     A_score[str(A)]["P@1"] += eval["P@1"]/5
-    #     A_score[str(A)]["P@3"] += eval["P@3"]/5
-    #     A_score[str(A)]["P@5"] += eval["P@5"]/5
+    for A in A_range:
+        eval = metrics[probtype_A[0]+str(A)].compute()
+        A_score[str(A)]["P@1"] += eval["P@1"]/5
+        A_score[str(A)]["P@3"] += eval["P@3"]/5
+        A_score[str(A)]["P@5"] += eval["P@5"]/5
     eval = metrics[probtype[0]+str(1)].compute()
     A_score["exp"]["P@1"] += eval["P@1"]/5
     A_score["exp"]["P@3"] += eval["P@3"]/5
     A_score["exp"]["P@5"] += eval["P@5"]/5
 
-# for A in A_range:
-#     msg = [k + f": {100*v:.2f}" for k, v in  A_score[str(A)].items()]
-#     print(f"score of A = {A}: " + " ".join(msg))
+for A in A_range:
+    msg = [k + f": {100*v:.2f}" for k, v in  A_score[str(A)].items()]
+    print(f"score of A = {A}: " + " ".join(msg))
 
 msg = [k + f": {100*v:.2f}" for k, v in  A_score['exp'].items()]
 print("score of exp: " + " ".join(msg))
@@ -107,22 +112,26 @@ data_x = datasets["test"]["x"]
 data_y = datasets["test"]["y"]
 prob_A = []
 bests = {"P@1":0, "P@3":0, "P@5":0 }
-# for key in metrics_for_eval:
-#     re_organized_score = {A:A_score[A][key] for A in A_score.keys()}
-#     print(key, " : ", re_organized_score)
-#     best_A = float(max(re_organized_score, key=re_organized_score.get))
-#     if ("sigmoid", best_A) not in prob_A:
-#         prob_A.append(("sigmoid", best_A))
-#     bests[key] = best_A
+for key in metrics_for_eval:
+    re_organized_score = {A:A_score[A][key] for A in A_score.keys()}
+    print(key, " : ", re_organized_score)
+    best_A = float(max(re_organized_score, key=re_organized_score.get))
+    if ("sigmoid", best_A) not in prob_A:
+        prob_A.append(("sigmoid", best_A))
+    bests[key] = best_A
 
 if ARGS.modeltype == "l2":
-    # prob_A.append(("exp-L2", 1)) 
-    prob_A = [("exp-L2", 1)]
+    prob_A.append(("exp-L2", 1)) 
+    # prob_A = [("exp-L2", 1)]
     probtype = ["exp-L2"]
 elif ARGS.modeltype == "l1":
-    # prob_A.append(("exp-L1", 1)) 
-    prob_A = [("exp-L1", 1)]
+    prob_A.append(("exp-L1", 1)) 
+    # prob_A = [("exp-L1", 1)]
     probtype = ["exp-L1"]
+elif ARGS.modeltype == "lr":
+    prob_A.append(("sigmoid", 1)) 
+    # prob_A = [("exp-L1", 1)]
+    probtype = ["sigmoid"]
 
 #testing
 metrics_for_eval = ["P@1", "P@3", "P@5"]
@@ -130,11 +139,11 @@ t = time.time()
 metrics = metrics_in_batches(model, 1000, metrics_for_eval, prob_A)
 print(f"predicition time {time.time()-t:.2f} sec")
 
-# print("sigmoid")
-# for key in metrics_for_eval:
-#     eval.update({key:metrics["sigmoid"+str(bests[key])].compute()[key]})
-#     print(key, " best A = ", bests[key])
-# print("final scores:", eval)
+print("sigmoid")
+for key in metrics_for_eval:
+    eval.update({key:metrics["sigmoid"+str(bests[key])].compute()[key]})
+    print(key, " best A = ", bests[key])
+print("final scores:", eval)
 
 print("exp")
 eval = metrics[probtype[0]+str(1)].compute()
