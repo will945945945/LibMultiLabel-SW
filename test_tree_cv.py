@@ -57,12 +57,14 @@ for i in range(5):
 # Cross Validation
 # prob_A = [(prob, A) for prob in probtype_A for A in A_range]
 if ARGS.modeltype == "l2":
-    # prob_A.append(("exp-L2", 1))
+    # prob_A.append(("exp-L2", 1)) 
     prob_A = [("exp-L2", 1)]
+    probtype = ["exp-L2"]
 elif ARGS.modeltype == "l1":
-    # prob_A.append(("exp-L1", 1))
+    # prob_A.append(("exp-L1", 1)) 
     prob_A = [("exp-L1", 1)]
-A_score = {str(A):{k:0. for k in metrics_for_eval} for A in A_range} 
+    probtype = ["exp-L1"]
+# A_score = {str(A):{k:0. for k in metrics_for_eval} for A in A_range} 
 # A_score['exp'] = {k:0. for k in metrics_for_eval}
 A_score = {'exp': {k:0. for k in metrics_for_eval}}
 for i in range(5):
@@ -79,7 +81,7 @@ for i in range(5):
     #     A_score[str(A)]["P@1"] += eval["P@1"]/5
     #     A_score[str(A)]["P@3"] += eval["P@3"]/5
     #     A_score[str(A)]["P@5"] += eval["P@5"]/5
-    
+    eval = metrics[probtype[0]+str(1)].compute()
     A_score["exp"]["P@1"] += eval["P@1"]/5
     A_score["exp"]["P@3"] += eval["P@3"]/5
     A_score["exp"]["P@5"] += eval["P@5"]/5
@@ -116,9 +118,11 @@ bests = {"P@1":0, "P@3":0, "P@5":0 }
 if ARGS.modeltype == "l2":
     # prob_A.append(("exp-L2", 1)) 
     prob_A = [("exp-L2", 1)]
+    probtype = ["exp-L2"]
 elif ARGS.modeltype == "l1":
     # prob_A.append(("exp-L1", 1)) 
     prob_A = [("exp-L1", 1)]
+    probtype = ["exp-L1"]
 
 #testing
 metrics_for_eval = ["P@1", "P@3", "P@5"]
@@ -133,5 +137,5 @@ print(f"predicition time {time.time()-t:.2f} sec")
 # print("final scores:", eval)
 
 print("exp")
-eval = metrics[probtype[0]+str(1.)].compute()
+eval = metrics[probtype[0]+str(1)].compute()
 print("final scores:", eval)
