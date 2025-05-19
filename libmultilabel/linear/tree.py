@@ -294,7 +294,7 @@ def get_estimated_model_size(root):
 def _normalize_c(cmd, scaler):
     args = cmd.split()
     for i in range(len(args) - 1):
-        if args[i] == '-c':
+        if (args[i] == '-c' and scaler > 0):
             current_c = float(args[i + 1])
             scaled_c = current_c / scaler
             args[i + 1] = str(scaled_c)
