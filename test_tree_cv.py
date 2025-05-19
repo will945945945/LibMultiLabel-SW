@@ -113,7 +113,7 @@ data_y = datasets["test"]["y"]
 prob_A = []
 bests = {"P@1":0, "P@3":0, "P@5":0 }
 for key in metrics_for_eval:
-    re_organized_score = {A:A_score[A][key] for A in A_score.keys()}
+    re_organized_score = {A:A_score[A][key] for A in A_score.keys() if A != "exp"}
     print(key, " : ", re_organized_score)
     best_A = float(max(re_organized_score, key=re_organized_score.get))
     if ("sigmoid", best_A) not in prob_A:
