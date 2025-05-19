@@ -49,7 +49,7 @@ for i in i_range:
         data_x,
         ARGS.liblinear_options,
         root=treeroot,
-        scale_c=parser.scale_c,
+        scale_c=ARGS.scale_c,
     )
 
     modelpath = ARGS.modelname+"_"+str(i+1)+".pkl"
