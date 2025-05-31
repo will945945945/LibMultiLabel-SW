@@ -105,9 +105,9 @@ def find_alpha_A_B(model_type, prob_type, train_data, test_data, param, positive
         decision_value_test, target_test, model_type, prob_type=prob_type, alpha=alpha, A=A, B=B
     )
     return ce, (alpha, A, B)
-data_names = ["real-sim" ]
-# ,"rcv1", "a9a", "ijcnn1", "webspam",
-prob_types = ["platt", "franc", "alpha"]
+
+data_names = ["real-sim" ,"rcv1", "a9a", "ijcnn1", "webspam",]
+prob_types = ["platt"]
 model_types = ["lr", "l2svm", "l1svm", ]
 df_cols = "dataset,model_type,te_NLL,alpha,A,B,best_C".split(",")
 
