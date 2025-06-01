@@ -44,7 +44,7 @@ def metrics_in_batches(models, batch_size, metrics_for_eval, prob_alpha):
             model.predict_decision(tmp_data)
             for prob, alpha in prob_alpha:
                 preds = model.predict_values(beam_width=ARGS.beamwidth, prob_type=prob, A=alpha)
-                if prob+str(alpha) not in preds:
+                if prob+str(alpha) not in preds_per_config:
                     preds_per_config[prob+str(alpha)] = preds
                 else:
                     preds_per_config[prob+str(alpha)] += preds
