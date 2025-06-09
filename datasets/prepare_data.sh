@@ -55,8 +55,8 @@ do
         cat trva.svm te.svm > trvate.svm
     elif [ "$i" == "covtype" ]; then
         ../../random_split.sh ../raw_data/$i.libsvm.binary 90
-        ln -sf ../raw_data/${i}.trva trva.svm
-        ln -sf ../raw_data/${i}.te   te.svm
+        ln -sf ../raw_data/${i}.libsvm.binary.trva trva.svm
+        ln -sf ../raw_data/${i}.libsvm.binary.te   te.svm
         ln -sf ../raw_data/$i        trvate.svm
     elif [ "$i" == "mushrooms" ]; then
         ../../random_split.sh ../raw_data/$i 90
