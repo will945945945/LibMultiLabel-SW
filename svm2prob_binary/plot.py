@@ -77,6 +77,8 @@ for dn in pbar:
                 positive_label_idx = np.where(preprocessor.label_mapping == 1)[0][0]
                 X_train, X_test = datasets["train"]["x"], datasets["test"]["x"]
                 y_train = datasets["train"]["y"]
+                print(X_train.shape, X_test.shape)
+                breakpoint()
                 # Load Best C
                 df = pd.read_csv(ARGS.table)
                 C = df.loc[(df['dataset'] == dn) & (df['model_type'] == model_type), 'best_C'].values[0]

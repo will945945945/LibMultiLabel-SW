@@ -75,7 +75,13 @@ def find_alpha(model_type, prob_type, X, y, param, positive_label_idx):
             _min = cur_ce
             best_alpha = alpha
     return _min, best_alpha
-data_names = ["cod-rna", "covtype", "mushrooms"]
+data_names = [
+    "a0a", "a1a", "a2a", "a3a", "a4a", "a5a", "a6a", "a7a", "a8a",
+    "breast-cancer_scale", "ionosphere_scale", "diabetes_scale",
+    "liver-disorders",
+    "madelon", "sonar_scale", "gisette_scale",
+    "skin_nonskin", "phishing", "mushrooms",
+]
 prob_types = ["alpha", "franc"]
 model_types = ["l2svm", "l1svm", ]
 df_cols = "dataset,model_type,te_NLL,alpha,A,B,best_C".split(",")

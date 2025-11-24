@@ -106,7 +106,13 @@ def find_alpha_A_B(model_type, prob_type, train_data, test_data, param, positive
     )
     return ce, (alpha, A, B)
 
-data_names = ["cod-rna", "covtype", "mushrooms"]
+data_names = [
+    "a0a", "a1a", "a2a", "a3a", "a4a", "a5a", "a6a", "a7a", "a8a",
+    "breast-cancer_scale", "ionosphere_scale", "diabetes_scale",
+    "liver-disorders",
+    "madelon", "sonar_scale", "gisette_scale",
+    "skin_nonskin", "phishing", "mushrooms",
+]
 # "real-sim" ,"rcv1", "a9a", "ijcnn1", "webspam",
 prob_types = ["platt"]
 model_types = ["lr", "l2svm", "l1svm", ]
