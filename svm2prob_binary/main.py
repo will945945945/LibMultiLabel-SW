@@ -14,6 +14,8 @@ from libmultilabel.common_utils import AttributeDict
 from scipy.special import expit
 from util import sigmoid_train, sigmoid_predict, gen_S
 
+import warnings
+warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 def l1_hinge_loss(x):
     """return max(0, 1 - x)"""
@@ -107,15 +109,14 @@ def find_alpha_A_B(model_type, prob_type, train_data, test_data, param, positive
     return ce, (alpha, A, B)
 
 data_names = [
-    "a0a", "a1a", "a2a", "a3a", "a4a", "a5a", "a6a", "a7a", "a8a",
+    "a1a", "a2a", "a3a", "a4a", "a5a", "a6a", "a7a", "a8a",
     "breast-cancer_scale", "ionosphere_scale", "diabetes_scale",
     "liver-disorders",
     "madelon", "sonar_scale", "gisette_scale",
     "skin_nonskin", "phishing", "mushrooms",
 ]
-# "real-sim" ,"rcv1", "a9a", "ijcnn1", "webspam",
-prob_types = ["platt"]
-model_types = ["lr", "l2svm", "l1svm", ]
+prob_types = ["platt", "alpha", "franc"]
+model_types = ["lr", "l2svm", "l1svm"]
 df_cols = "dataset,model_type,te_NLL,alpha,A,B,best_C".split(",")
 
 import sys
@@ -146,7 +147,10 @@ for prob_type in prob_types:
             datasets = linear.load_dataset("svm", ARGS.traindata_path, ARGS.testdata_path)
             preprocessor = linear.Preprocessor(False, False)
             datasets = preprocessor.fit_transform(datasets)
-            positive_label_idx = np.where(preprocessor.label_mapping == 1)[0][0]
+            try:
+                positive_label_idx = np.where(preprocessor.label_mapping == 1)[0][0]
+            except:
+                positive_label_idx = np.where(preprocessor.label_mapping == 2)[0][0]
             X, y = datasets["train"]["x"], datasets["train"]["y"]
             X_test, y_test = datasets["test"]["x"], datasets["test"]["y"]
             pbar_dn = tqdm(space)
