@@ -7,7 +7,7 @@ sys.path.append(parent_dir)
 import libmultilabel.linear as linear
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import KFold, StratifiedKFold
+from sklearn.model_selection import StratifiedKFold
 
 from tqdm import tqdm
 from libmultilabel.common_utils import AttributeDict
@@ -28,7 +28,6 @@ def l2_hinge_loss(x):
 
 
 def decision_value_to_prob(decision_values, prob_type, model_type, alpha=None, A=None, B=None):
-    # eps: a scalar close to zero, which is used to avoid numerical issues when calculating cross entropy
     eps = np.finfo(decision_values.dtype).eps
     model_type = model_type.lower()
 
@@ -42,145 +41,227 @@ def decision_value_to_prob(decision_values, prob_type, model_type, alpha=None, A
             prob = expit(0.5 * alpha * (loss_func(-decision_values) - loss_func(decision_values)))
             return np.where(prob == 1, 1.0 - eps, prob)
         if prob_type == "platt":
-            eps = np.finfo(decision_values.dtype).eps
             prob = np.expand_dims(
-                np.array([sigmoid_predict(float(x), A, B) for x in decision_values]), axis=-1
+                np.array([sigmoid_predict(float(x), A, B) for x in decision_values]),
+                axis=-1,
             )
             return np.where(prob == 1, 1.0 - eps, prob)
 
 
 def cal_metrics(preds, target, model_type, prob_type=None, alpha=None, A=None, B=None):
     metrics_ce = linear.get_metrics(["CrossEntropy"], 2)
-    # metrics_acc = linear.get_metrics(["P@1"], 2)
-    
-    probs = decision_value_to_prob(preds, prob_type, model_type, alpha, A, B)
-    # CrossEntropy
-    metrics_ce.update(probs, target)
-    # Acc
-    # probs = np.concatenate([1 - probs, probs], axis=1)
-    # target = np.concatenate([1 - target, target], axis=1)
-    # metrics_acc.update(probs, target)
 
+    probs = decision_value_to_prob(preds, prob_type, model_type, alpha, A, B)
+    metrics_ce.update(probs, target)
     metrics_ce = metrics_ce.compute()
-    # metrics_acc = metrics_acc.compute()
 
     return metrics_ce["CrossEntropy"]
 
-def find_alpha_A_B(model_type, prob_type, train_data, test_data, param, positive_label_idx):
+
+def find_all_ce(model_type, train_data, test_data, param, positive_label_idx):
+    """
+    Train ONE model with given (model_type, param) on train_data,
+    then:
+
+      - For non-LR models, use gen_S on train_data to tune alpha for the "alpha" method.
+      - For Franc, fix alpha=1.
+      - Optionally compute Platt (A,B).
+
+    Finally, compute CE on test_data for all methods using the SAME decision values.
+
+    Returns:
+        {
+          "alpha": (ce_alpha, alpha_best, None, None),
+          "franc": (ce_franc, 1.0,      None, None),
+          "platt": (ce_platt, None,     A,    B)   # ce_platt can be None if model_type == "lr"
+        }
+    """
     X_train, y_train = train_data
     X_test, y_test = test_data
-    alpha, A, B = None, None, None
-    # Train the model
+
     model = linear.train_binary_and_multiclass(y_train, X_train, False, param)
-    # Test Data
+
+    # Decision values on test split
     decision_value_test = model.predict_values(X_test)[:, positive_label_idx][:, np.newaxis]
     target_test = y_test.toarray()[:, positive_label_idx][:, np.newaxis]
 
+    alpha_best, A, B = None, None, None
+
     if model_type != "lr":
-        # Train Data (S)
         decision_value_train = gen_S(X_train, y_train, positive_label_idx, param)[:, np.newaxis]
         target_train = y_train.toarray()[:, positive_label_idx][:, np.newaxis]
 
-        if prob_type == "alpha":
-            # Grid search Alpha value
-            _min = float("inf")
-            best_alpha = 0
-            # Use Whole Training Set
-            # ======================
-            for tmp_alpha in np.arange(1, 10.1, 0.1):
-                metric = cal_metrics(decision_value_train, target_train, model_type, prob_type=prob_type, alpha=tmp_alpha
-                )
-                if metric < _min:
-                    _min = metric
-                    best_alpha = tmp_alpha
+        _min = float("inf")
+        best_alpha = 0.0
+        for tmp_alpha in [i / 10 for i in range(10, 101)]:
+            metric = cal_metrics(
+                decision_value_train,
+                target_train,
+                model_type,
+                prob_type="alpha",
+                alpha=tmp_alpha,
+            )
+            if metric < _min:
+                _min = metric
+                best_alpha = tmp_alpha
+        alpha_best = best_alpha
 
-            alpha = best_alpha
+        A, B = sigmoid_train(decision_value_train, target_train)
 
-        if prob_type == "platt":
-            # Train Platt model.
-            A, B = sigmoid_train(decision_value_train, target_train)
-
-        if prob_type == "franc":
-            alpha = 1
-    
-    ce = cal_metrics(
-        decision_value_test, target_test, model_type, prob_type=prob_type, alpha=alpha, A=A, B=B
+    # alpha method (tuned alpha_best)
+    ce_alpha = cal_metrics(
+        decision_value_test,
+        target_test,
+        model_type,
+        prob_type="alpha",
+        alpha=alpha_best,
     )
-    return ce, (alpha, A, B)
+
+    # Franc method (alpha fixed to 1)
+    ce_franc = cal_metrics(
+        decision_value_test,
+        target_test,
+        model_type,
+        prob_type="franc",
+        alpha=1.0,
+    )
+
+    # Platt method
+    ce_platt = cal_metrics(
+        decision_value_test,
+        target_test,
+        model_type,
+        prob_type="platt",
+        A=A,
+        B=B,
+    )
+
+    return {
+        "alpha": (ce_alpha, alpha_best, None, None),
+        "franc": (ce_franc, 1.0, None, None),
+        "platt": (ce_platt, None, A, B),
+    }
+
 
 data_names = [
     "a1a", "a2a", "a3a", "a4a", "a5a", "a6a", "a7a", "a8a",
     "breast-cancer_scale", "ionosphere_scale", "diabetes_scale",
     "liver-disorders",
-    "madelon", "sonar_scale", "gisette_scale",
+    "madelon",
+    "sonar_scale", "gisette_scale",
     "skin_nonskin", "phishing", "mushrooms",
 ]
-prob_types = ["platt", "alpha", "franc"]
+
+# We are focusing on alpha and franc here
+prob_types = ["alpha", "franc", "platt"]
 model_types = ["lr", "l2svm", "l1svm"]
 df_cols = "dataset,model_type,te_NLL,alpha,A,B,best_C".split(",")
 
-import sys
 search = sys.argv[1]
-if search == 'tuned':
+if search == "tuned":
     space = [i for i in range(-13, 11)]
 else:
     space = [1]
 
 model2s = {
-    "l2svm":1,
-    "l1svm":3,
-    "lr":0
+    "l2svm": 1,
+    "l1svm": 3,
+    "lr": 0,
 }
 
-for prob_type in prob_types:
-    for dn in data_names:
-        df = {_c: [] for _c in df_cols}
-        for model_type in model_types:
-            _min_ce = float('inf')
-            best_C = 0
-            ARGS = {
-                    "traindata_path": f"../datasets/binary_datasets/dataset_{dn}/trva.svm",
-                    "testdata_path": f"../datasets/binary_datasets/dataset_{dn}/te.svm",
-                }
-            ARGS = AttributeDict(ARGS)
-            # Load Data
-            datasets = linear.load_dataset("svm", ARGS.traindata_path, ARGS.testdata_path)
-            preprocessor = linear.Preprocessor(False, False)
-            datasets = preprocessor.fit_transform(datasets)
-            try:
-                positive_label_idx = np.where(preprocessor.label_mapping == 1)[0][0]
-            except:
-                positive_label_idx = np.where(preprocessor.label_mapping == 2)[0][0]
-            X, y = datasets["train"]["x"], datasets["train"]["y"]
-            X_test, y_test = datasets["test"]["x"], datasets["test"]["y"]
-            pbar_dn = tqdm(space)
-            pbar_dn.set_description(f"Dataset: {dn}, Prob: {prob_type}, Model: {model_type}")
-            for i in pbar_dn:
-                C = 2 ** i 
-                param = f"-s {model2s[model_type]} -c {C}"                
-                cur_ce = 0
-                kf = StratifiedKFold(n_splits=5, shuffle=False)
-                for train_idx, test_idx in kf.split(X.toarray(), y.toarray()[:, positive_label_idx]):
-                    train_data = (X[train_idx], y[train_idx])
-                    test_data = (X[test_idx], y[test_idx])
-                    
-                    cur_ce += find_alpha_A_B(model_type, prob_type, train_data, test_data, param, positive_label_idx)[0]
-                cur_ce /= 5
-                if cur_ce < _min_ce:
-                    _min_ce = cur_ce
-                    best_C = C
+n_splits = 5
 
-            param = f"-s {model2s[model_type]} -c {best_C}" 
-            te_NLL, (alpha, A, B) = find_alpha_A_B(model_type, prob_type, (X, y), (X_test, y_test), param, positive_label_idx)
+for dn in data_names:
+    # Prepare per-method result dicts; we will write one CSV per prob_type
+    results = {pt: {c: [] for c in df_cols} for pt in prob_types}
 
-            for col in df_cols:
-                df[col].append(eval(col) if col != "dataset" else eval("dn"))
+    ARGS = {
+        "traindata_path": f"../datasets/binary_datasets/dataset_{dn}/trva.svm",
+        "testdata_path": f"../datasets/binary_datasets/dataset_{dn}/te.svm",
+    }
+    ARGS = AttributeDict(ARGS)
 
-        df = pd.DataFrame(df)
+    datasets = linear.load_dataset("svm", ARGS.traindata_path, ARGS.testdata_path)
+    preprocessor = linear.Preprocessor(False, False)
+    datasets = preprocessor.fit_transform(datasets)
 
+    try:
+        positive_label_idx = np.where(preprocessor.label_mapping == 1)[0][0]
+    except Exception:
+        positive_label_idx = np.where(preprocessor.label_mapping == 2)[0][0]
+
+    X, y = datasets["train"]["x"], datasets["train"]["y"]
+    X_test, y_test = datasets["test"]["x"], datasets["test"]["y"]
+
+    for model_type in model_types:
+        best_ce = {pt: float("inf") for pt in prob_types}
+        best_C = {pt: None for pt in prob_types}
+
+        pbar_dn = tqdm(space)
+        pbar_dn.set_description(f"Dataset: {dn}, Model: {model_type}")
+
+        for i in pbar_dn:
+            C = 2 ** i
+            param = f"-s {model2s[model_type]} -c {C}"
+
+            # Accumulate CE over folds for all methods
+            cur_ce = {pt: 0.0 for pt in prob_types}
+            kf = StratifiedKFold(n_splits=n_splits, shuffle=False)
+
+            for train_idx, test_idx in kf.split(X.toarray(), y.toarray()[:, positive_label_idx]):
+                train_data = (X[train_idx], y[train_idx])
+                test_data = (X[test_idx], y[test_idx])
+
+                ce_dict = find_all_ce(
+                    model_type,
+                    train_data,
+                    test_data,
+                    param,
+                    positive_label_idx,
+                )
+
+                for pt in prob_types:
+                    cur_ce[pt] += ce_dict[pt][0]
+
+            for pt in prob_types:
+                cur_ce[pt] /= n_splits
+                if cur_ce[pt] < best_ce[pt]:
+                    best_ce[pt] = cur_ce[pt]
+                    best_C[pt] = C
+
+        unique_Cs = sorted(set(best_C.values()))
+        full_eval = {}
+
+        for C in unique_Cs:
+            param = f"-s {model2s[model_type]} -c {C}"
+            ce_dict = find_all_ce(
+                model_type,
+                (X, y),
+                (X_test, y_test),
+                param,
+                positive_label_idx,
+            )
+            full_eval[C] = ce_dict
+
+        for pt in prob_types:
+            C_star = best_C[pt]
+            te_NLL, alpha, A, B = full_eval[C_star][pt]
+
+            res = results[pt]
+            res["dataset"].append(dn)
+            res["model_type"].append(model_type)
+            res["te_NLL"].append(te_NLL)
+            res["alpha"].append(alpha)
+            res["A"].append(A)
+            res["B"].append(B)
+            res["best_C"].append(C_star)
+
+    for pt in prob_types:
+        df = pd.DataFrame(results[pt])
         if search == "tuned":
-            os.makedirs(f"tables/tune/{prob_type}", exist_ok=True)
-            df.to_csv(f"tables/tune/{prob_type}/{dn}.csv", index=False)
+            out_dir = f"tables/tune/{pt}"
         else:
-            os.makedirs(f"tables/no_tune/{prob_type}", exist_ok=True)
-            df.to_csv(f"tables/no_tune/{prob_type}/{dn}.csv", index=False)
+            out_dir = f"tables/no_tune/{pt}"
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, f"{dn}.csv")
+        df.to_csv(out_path, index=False)
