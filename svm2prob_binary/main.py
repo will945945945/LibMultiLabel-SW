@@ -135,7 +135,8 @@ def find_all_ce(model_type, train_data, test_data, param, positive_label_idx):
         A=A,
         B=B,
     )
-
+    if alpha_best == 1 and ce_alpha != ce_franc:
+        print(ce_alpha, ce_franc)
     return {
         "alpha": (ce_alpha, alpha_best, None, None),
         "franc": (ce_franc, 1.0, None, None),
@@ -144,6 +145,7 @@ def find_all_ce(model_type, train_data, test_data, param, positive_label_idx):
 
 
 data_names = [
+    "a9a", "ijcnn1", "rcv1", "real-sim", "webspam",
     "a1a", "a2a", "a3a", "a4a", "a5a", "a6a", "a7a", "a8a",
     "breast-cancer_scale", "ionosphere_scale", "diabetes_scale",
     "liver-disorders",
@@ -229,6 +231,7 @@ for dn in data_names:
                     best_ce[pt] = cur_ce[pt]
                     best_C[pt] = C
 
+        # print(best_C, best_ce)
         unique_Cs = sorted(set(best_C.values()))
         full_eval = {}
 
