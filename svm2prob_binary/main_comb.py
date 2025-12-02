@@ -7,6 +7,7 @@ sys.path.append(parent_dir)
 import libmultilabel.linear as linear
 import numpy as np
 import pandas as pd
+from sklearn.utils import shuffle
 from sklearn.model_selection import StratifiedKFold
 
 from tqdm import tqdm
@@ -119,7 +120,7 @@ for dn in data_names:
     except Exception:
         positive_label_idx = np.where(preprocessor.label_mapping == 2)[0][0]
 
-    X, y = datasets["train"]["x"], datasets["train"]["y"]
+    X, y = shuffle(datasets["train"]["x"], datasets["train"]["y"], random_state=42)
     X_test, y_test = datasets["test"]["x"], datasets["test"]["y"]
 
     for model_type in model_types:

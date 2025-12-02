@@ -7,6 +7,7 @@ sys.path.append(parent_dir)
 import libmultilabel.linear as linear
 import numpy as np
 import pandas as pd
+from sklearn.utils import shuffle
 from sklearn.model_selection import StratifiedKFold
 
 from tqdm import tqdm
@@ -192,7 +193,7 @@ for dn in data_names:
     except Exception:
         positive_label_idx = np.where(preprocessor.label_mapping == 2)[0][0]
 
-    X, y = datasets["train"]["x"], datasets["train"]["y"]
+    X, y = shuffle(datasets["train"]["x"], datasets["train"]["y"], random_state=42)
     X_test, y_test = datasets["test"]["x"], datasets["test"]["y"]
 
     for model_type in model_types:
@@ -202,41 +203,67 @@ for dn in data_names:
         pbar_dn = tqdm(space)
         pbar_dn.set_description(f"Dataset: {dn}, Model: {model_type}")
 
-        for i in pbar_dn:
-            C = 2 ** i
-            param = f"-s {model2s[model_type]} -c {C}"
+        if len(space) > 1:
+            for i in pbar_dn:
+                C = 2 ** i
+                param = f"-s {model2s[model_type]} -c {C}"
 
-            # Accumulate CE over folds for all methods
-            cur_ce = {pt: 0.0 for pt in prob_types}
-            kf = StratifiedKFold(n_splits=n_splits, shuffle=False)
+                # Accumulate CE over folds for all methods
+                cur_ce = {pt: 0.0 for pt in prob_types}
+                kf = StratifiedKFold(n_splits=n_splits, shuffle=False)
 
-            for train_idx, test_idx in kf.split(X.toarray(), y.toarray()[:, positive_label_idx]):
-                train_data = (X[train_idx], y[train_idx])
-                test_data = (X[test_idx], y[test_idx])
+                for train_idx, test_idx in kf.split(X.toarray(), y.toarray()[:, positive_label_idx]):
+                    train_data = (X[train_idx], y[train_idx])
+                    test_data = (X[test_idx], y[test_idx])
 
+                    ce_dict = find_all_ce(
+                        model_type,
+                        train_data,
+                        test_data,
+                        param,
+                        positive_label_idx,
+                    )
+
+                    for pt in prob_types:
+                        cur_ce[pt] += ce_dict[pt][0]
+
+                for pt in prob_types:
+                    cur_ce[pt] /= n_splits
+                    if cur_ce[pt] < best_ce[pt]:
+                        best_ce[pt] = cur_ce[pt]
+                        best_C[pt] = C
+            
+            # print(best_C, best_ce)
+            unique_Cs = sorted(set(best_C.values()))
+            full_eval = {}
+
+            for C in unique_Cs:
+                param = f"-s {model2s[model_type]} -c {C}"
                 ce_dict = find_all_ce(
                     model_type,
-                    train_data,
-                    test_data,
+                    (X, y),
+                    (X_test, y_test),
                     param,
                     positive_label_idx,
                 )
-
-                for pt in prob_types:
-                    cur_ce[pt] += ce_dict[pt][0]
-
+                full_eval[C] = ce_dict
+            
             for pt in prob_types:
-                cur_ce[pt] /= n_splits
-                if cur_ce[pt] < best_ce[pt]:
-                    best_ce[pt] = cur_ce[pt]
-                    best_C[pt] = C
+                C_star = best_C[pt]
+                te_NLL, alpha, A, B = full_eval[C_star][pt]
 
-        # print(best_C, best_ce)
-        unique_Cs = sorted(set(best_C.values()))
-        full_eval = {}
+                res = results[pt]
+                res["dataset"].append(dn)
+                res["model_type"].append(model_type)
+                res["te_NLL"].append(te_NLL)
+                res["alpha"].append(alpha)
+                res["A"].append(A)
+                res["B"].append(B)
+                res["best_C"].append(C_star)
 
-        for C in unique_Cs:
+        else:
             param = f"-s {model2s[model_type]} -c {C}"
+
             ce_dict = find_all_ce(
                 model_type,
                 (X, y),
@@ -244,20 +271,19 @@ for dn in data_names:
                 param,
                 positive_label_idx,
             )
-            full_eval[C] = ce_dict
+            best_C[pt] = 1
+            full_eval = {1:ce_dict}
+            for pt in prob_types:
+                te_NLL, alpha, A, B = full_eval[1][pt]
 
-        for pt in prob_types:
-            C_star = best_C[pt]
-            te_NLL, alpha, A, B = full_eval[C_star][pt]
-
-            res = results[pt]
-            res["dataset"].append(dn)
-            res["model_type"].append(model_type)
-            res["te_NLL"].append(te_NLL)
-            res["alpha"].append(alpha)
-            res["A"].append(A)
-            res["B"].append(B)
-            res["best_C"].append(C_star)
+                res = results[pt]
+                res["dataset"].append(dn)
+                res["model_type"].append(model_type)
+                res["te_NLL"].append(te_NLL)
+                res["alpha"].append(alpha)
+                res["A"].append(A)
+                res["B"].append(B)
+                res["best_C"].append(1)
 
     for pt in prob_types:
         df = pd.DataFrame(results[pt])
