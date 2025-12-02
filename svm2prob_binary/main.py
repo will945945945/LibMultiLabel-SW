@@ -163,7 +163,7 @@ search = sys.argv[1]
 if search == "tuned":
     space = [i for i in range(-13, 11)]
 else:
-    space = [1]
+    space = [0]
 
 model2s = {
     "l2svm": 1,

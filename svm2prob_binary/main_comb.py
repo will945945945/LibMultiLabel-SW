@@ -41,16 +41,16 @@ def decision_value_to_prob(decision_values, model_type, alpha=None):
         return np.where(prob == 1, 1.0 - eps, prob)
 
 
-def cal_metrics(preds, target, model_type, prob_type=None, alpha=None, A=None, B=None):
+def cal_metrics(preds, target, model_type, prob_type=None, alpha=None):
     metrics_ce = linear.get_metrics(["CrossEntropy"], 2)
-    probs = decision_value_to_prob(preds, prob_type, model_type, alpha, A, B)
+    probs = decision_value_to_prob(preds, model_type, alpha)
     metrics_ce.update(probs, target)
     metrics_ce = metrics_ce.compute()
     return metrics_ce["CrossEntropy"]
 
 def find_alpha(model_type, X, y, param, positive_label_idx):
     ce_alpha = float('inf')
-    for alpha in space:
+    for alpha in [i / 10 for i in range(10, 101)]:
         cur_ce = 0
         kf = StratifiedKFold(n_splits=5, shuffle=False)
         for train_idx, test_idx in kf.split(X.toarray(), y.toarray()[:, positive_label_idx]):
@@ -89,13 +89,13 @@ data_names = [
 
 prob_types = ["alpha", "franc"]
 model_types = ["lr", "l2svm", "l1svm"]
-df_cols = "dataset,model_type,te_NLL,alpha,A,B,best_C".split(",")
+df_cols = "dataset,model_type,te_NLL,alpha,best_C".split(",")
 
 search = sys.argv[1]
 if search == "tuned":
     space = [i for i in range(-13, 11)]
 else:
-    space = [1]
+    space = [0]
 
 model2s = {
     "l2svm": 1,
@@ -166,9 +166,8 @@ for dn in data_names:
                     res["dataset"].append(dn)
                     res["model_type"].append(model_type)
                     res["te_NLL"].append(te_NLL)
-                    res["alpha"].append(best_alpha[pt])
+                    res["alpha"].append((best_alpha if pt == "alpha" else 1.0))
                     res["best_C"].append(C)
-
     for pt in prob_types:
         df = pd.DataFrame(results[pt])
         if search == "tuned":
