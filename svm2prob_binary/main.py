@@ -94,7 +94,7 @@ def find_all_ce(model_type, train_data, test_data, param, positive_label_idx):
 
         _min = float("inf")
         best_alpha = 0.0
-        for tmp_alpha in [i / 10 for i in range(10, 101)]:
+        for tmp_alpha in [i / 10 for i in range(1, 101)]:
             metric = cal_metrics(
                 decision_value_train,
                 target_train,
@@ -262,7 +262,7 @@ for dn in data_names:
                 res["best_C"].append(C_star)
 
         else:
-            param = f"-s {model2s[model_type]} -c {C}"
+            param = f"-s {model2s[model_type]} -c 1"
 
             ce_dict = find_all_ce(
                 model_type,
@@ -271,10 +271,8 @@ for dn in data_names:
                 param,
                 positive_label_idx,
             )
-            best_C[pt] = 1
-            full_eval = {1:ce_dict}
             for pt in prob_types:
-                te_NLL, alpha, A, B = full_eval[1][pt]
+                te_NLL, alpha, A, B = ce_dict[pt]
 
                 res = results[pt]
                 res["dataset"].append(dn)

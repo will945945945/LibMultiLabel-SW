@@ -51,7 +51,7 @@ def cal_metrics(preds, target, model_type, prob_type=None, alpha=None):
 
 def find_alpha(model_type, X, y, param, positive_label_idx):
     ce_alpha = float('inf')
-    for alpha in [i / 10 for i in range(10, 101)]:
+    for alpha in [i / 10 for i in range(1, 101)]:
         cur_ce = 0
         kf = StratifiedKFold(n_splits=5, shuffle=False)
         for train_idx, test_idx in kf.split(X.toarray(), y.toarray()[:, positive_label_idx]):
