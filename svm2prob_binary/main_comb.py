@@ -17,6 +17,12 @@ from scipy.special import expit
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
+import argparse
+import random
+
+def set_seed(seed: int):
+    random.seed(seed)
+    np.random.seed(seed)
 
 def l1_hinge_loss(x):
     """return max(0, 1 - x)"""
@@ -53,7 +59,11 @@ def find_alpha(model_type, X, y, param, positive_label_idx):
     ce_alpha = float('inf')
     for alpha in [i / 10 for i in range(1, 101)]:
         cur_ce = 0
-        kf = StratifiedKFold(n_splits=5, shuffle=False)
+        kf = StratifiedKFold(
+            n_splits=5,
+            shuffle=args.shuffle_folds,
+            random_state=(args.seed if args.shuffle_folds else None),
+        )
         for train_idx, test_idx in kf.split(X.toarray(), y.toarray()[:, positive_label_idx]):
             X_train, y_train = (X[train_idx], y[train_idx])
             X_test, y_test = (X[test_idx], y[test_idx])
@@ -92,7 +102,15 @@ prob_types = ["alpha", "franc"]
 model_types = ["lr", "l2svm", "l1svm"]
 df_cols = "dataset,model_type,te_NLL,alpha,best_C".split(",")
 
-search = sys.argv[1]
+parser = argparse.ArgumentParser()
+parser.add_argument("--search", type=str)
+parser.add_argument("--seed", type=int, default=42)
+parser.add_argument("--shuffle-folds", action="store_true")
+args = parser.parse_args()
+
+set_seed(args.seed)
+
+search = args.search
 if search == "tuned":
     space = [i for i in range(-13, 11)]
 else:
@@ -120,7 +138,7 @@ for dn in data_names:
     except Exception:
         positive_label_idx = np.where(preprocessor.label_mapping == 2)[0][0]
 
-    X, y = shuffle(datasets["train"]["x"], datasets["train"]["y"], random_state=42)
+    X, y = shuffle(datasets["train"]["x"], datasets["train"]["y"], random_state=args.seed)
     X_test, y_test = datasets["test"]["x"], datasets["test"]["y"]
 
     for model_type in model_types:
@@ -176,5 +194,5 @@ for dn in data_names:
         else:
             out_dir = f"tables/no_tune/{pt}"
         os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, f"{dn}.csv")
+        out_path = os.path.join(out_dir, f"{dn}_{args.seed}.csv")
         df.to_csv(out_path, index=False)

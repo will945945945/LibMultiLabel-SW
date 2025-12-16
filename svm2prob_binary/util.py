@@ -84,21 +84,22 @@ def check_prob(model_type, norm, target, pos_probs, preds):
     return (-diff_term(model_type, norm, target * preds) + pos_probs * diff_term(model_type, norm, preds) + (1 - pos_probs) * diff_term(model_type, norm, -preds)).sum(0).squeeze()
 
 
-def gen_S(X, y, positive_label_idx, param):
+def gen_S(X, y, positive_label_idx, param, n_splits=5, shuffle=False, seed=42):
     n_samples = y.shape[0]
     decision_values = np.zeros(n_samples)
 
-    kf = StratifiedKFold(n_splits=5, shuffle=False)
+    kf = StratifiedKFold(
+        n_splits=n_splits,
+        shuffle=shuffle,
+        random_state=(seed if shuffle else None),
+    )
+
     for train_idx, test_idx in kf.split(X.toarray(), y.toarray()[:, positive_label_idx]):
         X_train = X[train_idx]
         y_train = y[train_idx]
         X_test = X[test_idx]
 
-        for idx, (i, j) in enumerate(y[train_idx].toarray()):
-            if i == j == 0:
-                print(idx)
         model = linear.train_binary_and_multiclass(y_train, X_train, False, param)
-        
         dec_vals = model.predict_values(X_test)[:, positive_label_idx][:, np.newaxis]
 
         for i, idx in enumerate(test_idx):
