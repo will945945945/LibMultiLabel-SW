@@ -18,16 +18,17 @@ parser.add_argument("--scale_c", type=bool, default=False)
 ARGS = parser.parse_args()
 
 np.random.seed(ARGS.seed)
+NUM_FOLDS = 5
 data_splits = []
-for i in range(5):
+for i in range(NUM_FOLDS):
     datapath = ARGS.dataname+"_"+str(i+1)+".pkl"
     with open(datapath, "rb") as f:
         data_splits.append(pickle.load(f))
-i_range = range(5)
+i_range = range(NUM_FOLDS)
 #i_range = [2]
 for i in i_range:
-    data_y = sparse.vstack([data_splits[j]["train"]["y"] for j in range(5) if j != i])
-    data_x = sparse.vstack([data_splits[j]["train"]["x"] for j in range(5) if j != i])
+    data_y = sparse.vstack([data_splits[j]["train"]["y"] for j in range(NUM_FOLDS) if j != i])
+    data_x = sparse.vstack([data_splits[j]["train"]["x"] for j in range(NUM_FOLDS) if j != i])
 
     t = time.time()
     if(ARGS.buildtree):
@@ -51,12 +52,13 @@ for i in i_range:
         root=treeroot,
         scale_c=ARGS.scale_c,
     )
+    print(f"trainning time {time.time()-t:.2f} sec")
 
     modelpath = ARGS.modelname+"_"+str(i+1)+".pkl"
     with open(modelpath, "wb") as f:
         pickle.dump({"model": model},f)
 
-    print(f"trainning time {time.time()-t:.2f} sec")
+
 
 
 

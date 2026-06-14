@@ -28,18 +28,20 @@ full_preds = []
 probtype_A = ["sigmoid"]
 #probtype = ["L1-prob", "L2-prob"]
 A_range = [0.25, 0.5, 1., 1.5, 2., 2.5, 3., 4., 5., 6., 7., 8., 10., 12., 16.]
+C_range = [0.25, 0.5, 1, 2, 4, 8, 16, 32, 64]
 metrics_for_eval = ["P@1", "P@3", "P@5"]
-
-def metrics_in_batches(model, batch_size, metrics_for_eval, prob_alpha):
+NUM_FOLDS = 5
+BATCH_SIZE = 1000
+def metrics_in_batches(model, data_x, data_y, batch_size, metrics_for_eval, prob_alpha):
     num_instances = data_x.shape[0]
     num_batches = math.ceil(num_instances / batch_size)
 
     metrics = {}
     metrics.update({prob+str(alpha): linear.get_metrics(metrics_for_eval, num_classes=data_y.shape[1]) for prob, alpha in prob_alpha})
     for i in tqdm(range(num_batches)):
-        tmp_data = data_x[i * batch_size : (i + 1) * batch_size]
-        model.predict_decision(tmp_data)
-        target = data_y[i * batch_size : (i + 1) * batch_size].toarray()
+        batch_slice = np.s_[i * batch_size : (i + 1) * batch_size]
+        model.predict_decision(data_x[batch_slice])
+        target = data_y[batch_slice].toarray()
         for prob, alpha in prob_alpha:
             preds = model.predict_values(beam_width=ARGS.beamwidth, prob_type=prob, A=alpha)
             metrics[prob+str(alpha)].update(preds, target)
@@ -49,102 +51,108 @@ with open(ARGS.datapath, "rb") as F:
     datasets = pickle.load(F)
 
 data_splits = []
-for i in range(5):
+for i in range(NUM_FOLDS):
     datapath = ARGS.dataname+"_"+str(i+1)+".pkl"
     with open(datapath, "rb") as f:
         data_splits.append(pickle.load(f))
 
+
+probtype = {"l2": "exp-L2", "l1": "exp-L1", "lr": "sigmoid"}[ARGS.modeltype]
+exp_key = probtype + str(1)
+A_score = {C:{str(A):{metric:0. for metric in metrics_for_eval} for A in A_range} for C in C_range}
+exp_score= {C:{metric:0. for metric in metrics_for_eval} for C in C_range}
+
+
+def build_prob_A():
+    pairs = [(prob, A) for prob in probtype_A for A in A_range]
+    if (probtype, 1) not in pairs:
+        pairs.append((probtype, 1))
+    return pairs
+
 # Cross Validation
-prob_A = [(prob, A) for prob in probtype_A for A in A_range]
+for C in C_range:
+    print(f"score of C = {C}")
+    prob_A = build_prob_A()
+    for i in range(NUM_FOLDS):
+        modelpath = ARGS.modelname+"_c"+str(C)+"_5folds_"+str(i+1)+".pkl"
+        with open(modelpath, "rb") as F:
+            model = pickle.load(F)['model']
 
-if ARGS.modeltype == "l2":
-    prob_A.append(("exp-L2", 1)) 
-    # prob_A = [("exp-L2", 1)]
-    probtype = ["exp-L2"]
-elif ARGS.modeltype == "l1":
-    prob_A.append(("exp-L1", 1)) 
-    # prob_A = [("exp-L1", 1)]
-    probtype = ["exp-L1"]
-elif ARGS.modeltype == "lr":
-    prob_A.append(("sigmoid", 1)) 
-    # prob_A = [("exp-L1", 1)]
-    probtype = ["sigmoid"]
-A_score = {str(A):{k:0. for k in metrics_for_eval} for A in A_range} 
-A_score['exp'] = {k:0. for k in metrics_for_eval}
-# A_score = {'exp': {k:0. for k in metrics_for_eval}}
-for i in range(5):
-    modelpath = ARGS.modelname+"_5folds_"+str(i+1)+".pkl"
-    with open(modelpath, "rb") as F:
-        model = pickle.load(F)['model']
 
-    data_y = data_splits[i]["train"]["y"]
-    data_x = data_splits[i]["train"]["x"]
-    metrics = metrics_in_batches(model, 1000, metrics_for_eval, prob_A)
+        data_y = data_splits[i]["train"]["y"]
+        data_x = data_splits[i]["train"]["x"]
+        metrics = metrics_in_batches(model, data_x, data_y, BATCH_SIZE, metrics_for_eval, prob_A)
+
+        for A in A_range:
+            eval = metrics[probtype_A[0] + str(A)].compute()
+            for metric in metrics_for_eval:
+                A_score[C][str(A)][metric] += eval[metric] / NUM_FOLDS
+        eval = metrics[exp_key].compute()
+        for metric in metrics_for_eval:
+            exp_score[C][metric] += eval[metric] / NUM_FOLDS
 
     for A in A_range:
-        eval = metrics[probtype_A[0]+str(A)].compute()
-        A_score[str(A)]["P@1"] += eval["P@1"]/5
-        A_score[str(A)]["P@3"] += eval["P@3"]/5
-        A_score[str(A)]["P@5"] += eval["P@5"]/5
-    eval = metrics[probtype[0]+str(1)].compute()
-    A_score["exp"]["P@1"] += eval["P@1"]/5
-    A_score["exp"]["P@3"] += eval["P@3"]/5
-    A_score["exp"]["P@5"] += eval["P@5"]/5
+        msg = [k + f": {100*v:.2f}" for k, v in  A_score[C][str(A)].items()]
+        print(f"score of A = {A}: " + " ".join(msg))
 
-for A in A_range:
-    msg = [k + f": {100*v:.2f}" for k, v in  A_score[str(A)].items()]
-    print(f"score of A = {A}: " + " ".join(msg))
+    msg = [k + f": {100*v:.2f}" for k, v in  exp_score[C].items()]
+    print("score of exp: " + " ".join(msg))
 
-msg = [k + f": {100*v:.2f}" for k, v in  A_score['exp'].items()]
-print("score of exp: " + " ".join(msg))
-
-best_A = {}
-eval = {}
-data_x = datasets["test"]["x"]
-data_y = datasets["test"]["y"]
-with open(ARGS.modelname+".pkl", "rb") as F:
-     model = pickle.load(F)['model']
  
-#testing
-best_A = {}
-eval = {}
+#get best configurations for each metric
 data_x = datasets["test"]["x"]
 data_y = datasets["test"]["y"]
-prob_A = []
-bests = {"P@1":0, "P@3":0, "P@5":0 }
-for key in metrics_for_eval:
-    re_organized_score = {A:A_score[A][key] for A in A_score.keys() if A != "exp"}
-    print(key, " : ", re_organized_score)
-    best_A = float(max(re_organized_score, key=re_organized_score.get))
-    if ("sigmoid", best_A) not in prob_A:
-        prob_A.append(("sigmoid", best_A))
-    bests[key] = best_A
+bests = {k: None for k in metrics_for_eval}
+best_exp_C = {k: None for k in metrics_for_eval}
+for metric in metrics_for_eval:
+    re_organized_score = {(C, float(A)):A_score[C][A][metric] for C in C_range for A in A_score[C].keys()}
+    re_organized_exp_score = {C:exp_score[C][metric] for C in C_range}
+    print(metric, " : ", re_organized_score)
+    bests[metric] = max(re_organized_score, key=re_organized_score.get)
+    best_exp_C[metric] = max(re_organized_exp_score, key=re_organized_exp_score.get)
+    print(metric, bests[metric])
 
-if ARGS.modeltype == "l2":
-    prob_A.append(("exp-L2", 1)) 
-    # prob_A = [("exp-L2", 1)]
-    probtype = ["exp-L2"]
-elif ARGS.modeltype == "l1":
-    prob_A.append(("exp-L1", 1)) 
-    # prob_A = [("exp-L1", 1)]
-    probtype = ["exp-L1"]
-elif ARGS.modeltype == "lr":
-    prob_A.append(("sigmoid", 1)) 
-    # prob_A = [("exp-L1", 1)]
-    probtype = ["sigmoid"]
+print(bests)
 
-#testing
-metrics_for_eval = ["P@1", "P@3", "P@5"]
-t = time.time()
-metrics = metrics_in_batches(model, 1000, metrics_for_eval, prob_A)
-print(f"predicition time {time.time()-t:.2f} sec")
+eval_sigmoid = {metric:0. for metric in metrics_for_eval}
+sigmoid_jobs = {}
+#testing sigmoid_A
+for metric in metrics_for_eval:
+    C, A = bests[metric]
+    sigmoid_jobs.setdefault(C, {}).setdefault(A, []).append(metric)
+for C, metric_A in sigmoid_jobs.items():
+    with open(ARGS.modelname+"_c"+str(C)+".pkl", "rb") as F:
+        model = pickle.load(F)['model']
+    prob_A = [("sigmoid", A) for A in metric_A]
+    t = time.time()
+    metrics = metrics_in_batches(model, data_x, data_y, BATCH_SIZE, metrics_for_eval, prob_A)
+    print(f"predicition time for sigmoid A {time.time()-t:.2f} sec")
+    
+    for A, ms in metric_A.items():
+        computed = metrics["sigmoid" + str(A)].compute()
+        for metric in ms:
+            eval_sigmoid[metric] = computed[metric]
+            print(metric, " best C,A = ", (C, A))
 
 print("sigmoid")
-for key in metrics_for_eval:
-    eval.update({key:metrics["sigmoid"+str(bests[key])].compute()[key]})
-    print(key, " best A = ", bests[key])
-print("final scores:", eval)
+print("final scores:", eval_sigmoid)
 
+
+eval_exp = {metric:0. for metric in metrics_for_eval}
+exp_jobs = {}
+#testing for prior works
+for metric in metrics_for_eval:
+    exp_jobs.setdefault(best_exp_C[metric], []).append(metric)
+for C, ms in exp_jobs.items():
+    with open(ARGS.modelname+"_c"+str(C)+".pkl", "rb") as F:
+        model = pickle.load(F)['model']
+
+    t = time.time()
+    metrics = metrics_in_batches(model, data_x, data_y, BATCH_SIZE, metrics_for_eval, [(probtype, 1)])
+    print(f"predicition time for exp {time.time()-t:.2f} sec")
+    computed = metrics[exp_key].compute()
+    for metric in ms:
+        eval_exp[metric] = computed[metric]
+        print(metric, "best C for exp = ", C)
 print("exp")
-eval = metrics[probtype[0]+str(1)].compute()
-print("final scores:", eval)
+print("final scores:", eval_exp)
